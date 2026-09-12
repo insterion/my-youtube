@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Version 0.3
+   Version 0.4
    ========================================= */
 
 
@@ -77,7 +77,9 @@ let channels = [];
    ========================================= */
 
 let currentPage =
-    localStorage.getItem(PAGE_STORAGE_KEY) || "new";
+    localStorage.getItem(
+        PAGE_STORAGE_KEY
+    ) || "new";
 
 
 /* =========================================
@@ -87,10 +89,13 @@ let currentPage =
 function loadVideos() {
 
     const savedVideos =
-        localStorage.getItem(VIDEO_STORAGE_KEY);
+        localStorage.getItem(
+            VIDEO_STORAGE_KEY
+        );
 
 
     if (!savedVideos) {
+
         return videos;
     }
 
@@ -102,6 +107,7 @@ function loadVideos() {
 
 
         if (!Array.isArray(parsedVideos)) {
+
             return videos;
         }
 
@@ -145,6 +151,7 @@ function loadChannels() {
 
 
     if (!savedChannels) {
+
         return [];
     }
 
@@ -156,6 +163,7 @@ function loadChannels() {
 
 
         if (!Array.isArray(parsedChannels)) {
+
             return [];
         }
 
@@ -211,38 +219,41 @@ function setupNavigation() {
         );
 
 
-    navButtons.forEach((button, index) => {
+    navButtons.forEach(
+        (button, index) => {
 
-        button.addEventListener(
-            "click",
-            () => {
+            button.addEventListener(
+                "click",
+                () => {
 
-                const pages = [
+                    const pages = [
 
-                    "new",
+                        "new",
 
-                    "saved",
+                        "saved",
 
-                    "watched",
+                        "watched",
 
-                    "channels"
+                        "channels"
 
-                ];
-
-
-                currentPage =
-                    pages[index];
+                    ];
 
 
-                saveCurrentPage();
+                    currentPage =
+                        pages[index];
 
-                updateNavigation();
 
-                updateContent();
-            }
-        );
+                    saveCurrentPage();
 
-    });
+                    updateNavigation();
+
+                    updateContent();
+
+                }
+            );
+
+        }
+    );
 }
 
 
@@ -258,13 +269,15 @@ function updateNavigation() {
         );
 
 
-    navButtons.forEach(button => {
+    navButtons.forEach(
+        button => {
 
-        button.classList.remove(
-            "active"
-        );
+            button.classList.remove(
+                "active"
+            );
 
-    });
+        }
+    );
 
 
     const pageIndexes = {
@@ -293,7 +306,7 @@ function updateNavigation() {
 
 
 /* =========================================
-   GET VIDEOS FOR CURRENT PAGE
+   GET VISIBLE VIDEOS
    ========================================= */
 
 function getVisibleVideos() {
@@ -301,7 +314,8 @@ function getVisibleVideos() {
     if (currentPage === "new") {
 
         return videos.filter(
-            video => !video.watched
+            video =>
+                !video.watched
         );
     }
 
@@ -309,7 +323,8 @@ function getVisibleVideos() {
     if (currentPage === "saved") {
 
         return videos.filter(
-            video => video.saved
+            video =>
+                video.saved
         );
     }
 
@@ -317,7 +332,8 @@ function getVisibleVideos() {
     if (currentPage === "watched") {
 
         return videos.filter(
-            video => video.watched
+            video =>
+                video.watched
         );
     }
 
@@ -327,7 +343,7 @@ function getVisibleVideos() {
 
 
 /* =========================================
-   UPDATE MAIN CONTENT
+   UPDATE CONTENT
    ========================================= */
 
 function updateContent() {
@@ -345,6 +361,7 @@ function updateContent() {
 
 
     if (!videoList || !sectionTitle) {
+
         return;
     }
 
@@ -410,8 +427,11 @@ function updateContent() {
 
     videoList.innerHTML =
         visibleVideos
-            .map(video =>
-                createVideoCard(video)
+            .map(
+                video =>
+                    createVideoCard(
+                        video
+                    )
             )
             .join("");
 
@@ -450,7 +470,9 @@ function createVideoCard(video) {
 
         <article
             class="video-card"
-            data-video-id="${escapeHtml(video.id)}"
+            data-video-id="${escapeHtml(
+                video.id
+            )}"
         >
 
             <div class="thumbnail">
@@ -465,19 +487,27 @@ function createVideoCard(video) {
             <div class="video-info">
 
                 <h3>
-                    ${escapeHtml(video.title)}
+                    ${escapeHtml(
+                        video.title
+                    )}
                 </h3>
 
 
                 <p class="channel-name">
-                    ${escapeHtml(video.channel)}
+                    ${escapeHtml(
+                        video.channel
+                    )}
                 </p>
 
 
                 <p class="video-date">
-                    ${escapeHtml(video.date)}
+                    ${escapeHtml(
+                        video.date
+                    )}
                     •
-                    ${escapeHtml(video.duration)}
+                    ${escapeHtml(
+                        video.duration
+                    )}
                 </p>
 
 
@@ -501,7 +531,9 @@ function createVideoCard(video) {
                 </div>
 
 
-                <div class="video-actions secondary-actions">
+                <div
+                    class="video-actions secondary-actions"
+                >
 
                     <button
                         class="action-button download-button"
@@ -529,7 +561,7 @@ function createVideoCard(video) {
 
 
 /* =========================================
-   SAFE TEXT
+   ESCAPE HTML
    ========================================= */
 
 function escapeHtml(text) {
@@ -575,7 +607,6 @@ function setupVideoButtons() {
         )
         .forEach(card => {
 
-
             const videoId =
                 card.getAttribute(
                     "data-video-id"
@@ -611,7 +642,9 @@ function setupVideoButtons() {
                 watchButton.addEventListener(
                     "click",
                     () =>
-                        watchVideo(videoId)
+                        watchVideo(
+                            videoId
+                        )
                 );
             }
 
@@ -621,7 +654,9 @@ function setupVideoButtons() {
                 watchedButton.addEventListener(
                     "click",
                     () =>
-                        toggleWatched(videoId)
+                        toggleWatched(
+                            videoId
+                        )
                 );
             }
 
@@ -631,7 +666,9 @@ function setupVideoButtons() {
                 saveButton.addEventListener(
                     "click",
                     () =>
-                        toggleSaved(videoId)
+                        toggleSaved(
+                            videoId
+                        )
                 );
             }
 
@@ -659,7 +696,8 @@ function watchVideo(videoId) {
 
     const video =
         videos.find(
-            item => item.id === videoId
+            item =>
+                item.id === videoId
         );
 
 
@@ -682,7 +720,8 @@ function toggleWatched(videoId) {
 
     const video =
         videos.find(
-            item => item.id === videoId
+            item =>
+                item.id === videoId
         );
 
 
@@ -709,7 +748,8 @@ function toggleSaved(videoId) {
 
     const video =
         videos.find(
-            item => item.id === videoId
+            item =>
+                item.id === videoId
         );
 
 
@@ -736,7 +776,8 @@ function toggleDownloaded(videoId) {
 
     const video =
         videos.find(
-            item => item.id === videoId
+            item =>
+                item.id === videoId
         );
 
 
@@ -746,9 +787,9 @@ function toggleDownloaded(videoId) {
 
 
     /*
-       This is only a temporary status.
+       This only changes the status.
 
-       No file is downloaded yet.
+       No actual file is downloaded.
     */
 
     video.downloaded =
@@ -778,12 +819,6 @@ function updateNewVideoCount() {
     }
 
 
-    const newCount =
-        videos.filter(
-            video => !video.watched
-        ).length;
-
-
     if (currentPage === "channels") {
 
         countElement.textContent =
@@ -791,6 +826,13 @@ function updateNewVideoCount() {
 
         return;
     }
+
+
+    const newCount =
+        videos.filter(
+            video =>
+                !video.watched
+        ).length;
 
 
     if (newCount === 1) {
@@ -880,8 +922,11 @@ function renderChannelsPage() {
         <div class="channel-list">
 
             ${channels
-                .map(channel =>
-                    createChannelCard(channel)
+                .map(
+                    channel =>
+                        createChannelCard(
+                            channel
+                        )
                 )
                 .join("")
             }
@@ -909,20 +954,30 @@ function createChannelCard(channel) {
 
         <article
             class="channel-card"
-            data-channel-id="${escapeHtml(channel.id)}"
+            data-channel-id="${escapeHtml(
+                channel.id
+            )}"
         >
 
             <div class="channel-card-header">
 
                 <div>
 
-                    <h3 class="channel-card-name">
-                        ${escapeHtml(channel.name)}
+                    <h3
+                        class="channel-card-name"
+                    >
+                        ${escapeHtml(
+                            channel.name
+                        )}
                     </h3>
 
 
-                    <p class="channel-card-url">
-                        ${escapeHtml(channel.url)}
+                    <p
+                        class="channel-card-url"
+                    >
+                        ${escapeHtml(
+                            channel.url
+                        )}
                     </p>
 
                 </div>
@@ -930,7 +985,9 @@ function createChannelCard(channel) {
             </div>
 
 
-            <div class="channel-card-actions">
+            <div
+                class="channel-card-actions"
+            >
 
                 <button
                     class="channel-delete-button"
@@ -959,14 +1016,16 @@ function setupAddChannelButton() {
         );
 
 
-    buttons.forEach(button => {
+    buttons.forEach(
+        button => {
 
-        button.addEventListener(
-            "click",
-            showAddChannelForm
-        );
+            button.addEventListener(
+                "click",
+                showAddChannelForm
+            );
 
-    });
+        }
+    );
 }
 
 
@@ -987,13 +1046,12 @@ function showAddChannelForm() {
     }
 
 
-    const existingForm =
+    if (
         document.querySelector(
             ".channel-form"
-        );
+        )
+    ) {
 
-
-    if (existingForm) {
         return;
     }
 
@@ -1084,8 +1142,52 @@ function showAddChannelForm() {
         )
         .addEventListener(
             "click",
-            () => updateContent()
+            () =>
+                updateContent()
         );
+}
+
+
+/* =========================================
+   CHECK YOUTUBE URL
+   ========================================= */
+
+function isYouTubeUrl(url) {
+
+    try {
+
+        const parsedUrl =
+            new URL(url);
+
+
+        const hostname =
+            parsedUrl.hostname
+                .toLowerCase();
+
+
+        const allowedHosts = [
+
+            "youtube.com",
+
+            "www.youtube.com",
+
+            "m.youtube.com",
+
+            "youtu.be",
+
+            "www.youtu.be"
+
+        ];
+
+
+        return allowedHosts.includes(
+            hostname
+        );
+
+    } catch (error) {
+
+        return false;
+    }
 }
 
 
@@ -1140,6 +1242,16 @@ function saveNewChannel() {
     }
 
 
+    if (!isYouTubeUrl(url)) {
+
+        alert(
+            "Please enter a valid YouTube URL."
+        );
+
+        return;
+    }
+
+
     const alreadyExists =
         channels.some(
             channel =>
@@ -1164,9 +1276,11 @@ function saveNewChannel() {
             "channel-" +
             Date.now(),
 
-        name: name,
+        name:
+            name,
 
-        url: url,
+        url:
+            url,
 
         addedAt:
             new Date().toISOString()
@@ -1226,14 +1340,15 @@ function setupChannelButtons() {
 
 
 /* =========================================
-   DELETE CHANNEL ACTION
+   DELETE CHANNEL
    ========================================= */
 
 function deleteChannel(channelId) {
 
     const channel =
         channels.find(
-            item => item.id === channelId
+            item =>
+                item.id === channelId
         );
 
 
@@ -1255,7 +1370,8 @@ function deleteChannel(channelId) {
 
     channels =
         channels.filter(
-            item => item.id !== channelId
+            item =>
+                item.id !== channelId
         );
 
 
