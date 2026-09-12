@@ -1,6 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application stylesheet
+   Version 0.3
    ========================================= */
 
 
@@ -208,7 +209,7 @@ body {
 }
 
 
-/* ---------- Buttons ---------- */
+/* ---------- Video buttons ---------- */
 
 .video-actions {
     display: flex;
@@ -265,6 +266,10 @@ body {
     color: #cbd5e1;
 }
 
+.watched-button.is-active {
+    color: #86efac;
+}
+
 
 /* Download */
 
@@ -272,11 +277,237 @@ body {
     color: #93c5fd;
 }
 
+.download-button.is-active {
+    color: #86efac;
+}
+
 
 /* Save */
 
 .save-button {
     color: #f8fafc;
+}
+
+.save-button.is-active {
+    color: #facc15;
+}
+
+
+/* ---------- Empty state ---------- */
+
+.empty-state {
+    padding: 38px 18px;
+
+    text-align: center;
+
+    background: #111827;
+
+    border: 1px solid #1f2937;
+    border-radius: 16px;
+}
+
+.empty-icon {
+    margin-bottom: 12px;
+
+    font-size: 34px;
+    color: #60a5fa;
+}
+
+.empty-state h3 {
+    margin: 0 0 7px;
+
+    font-size: 18px;
+}
+
+.empty-state p {
+    margin: 0 auto 18px;
+
+    max-width: 320px;
+
+    color: #94a3b8;
+
+    font-size: 14px;
+}
+
+
+/* ---------- Add channel button ---------- */
+
+.add-channel-button {
+    min-height: 44px;
+
+    padding: 10px 18px;
+
+    border: 0;
+    border-radius: 10px;
+
+    background: #2563eb;
+    color: white;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+
+/* ---------- Channel list ---------- */
+
+.channel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+
+/* ---------- Channel card ---------- */
+
+.channel-card {
+    padding: 15px;
+
+    background: #111827;
+
+    border: 1px solid #1f2937;
+    border-radius: 15px;
+}
+
+.channel-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    gap: 12px;
+}
+
+.channel-card-name {
+    margin: 0;
+
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.channel-card-url {
+    margin: 5px 0 0;
+
+    word-break: break-word;
+
+    color: #94a3b8;
+
+    font-size: 12px;
+}
+
+.channel-card-actions {
+    margin-top: 13px;
+
+    display: flex;
+    gap: 8px;
+}
+
+.channel-delete-button {
+    min-height: 40px;
+
+    padding: 8px 13px;
+
+    border: 1px solid #7f1d1d;
+    border-radius: 9px;
+
+    background: #3f1212;
+    color: #fca5a5;
+
+    font-size: 13px;
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+
+/* ---------- Add channel form ---------- */
+
+.channel-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    margin-bottom: 16px;
+
+    padding: 16px;
+
+    background: #111827;
+
+    border: 1px solid #1f2937;
+    border-radius: 16px;
+}
+
+.channel-form h3 {
+    margin: 0;
+
+    font-size: 18px;
+}
+
+.channel-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    color: #cbd5e1;
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.channel-form input {
+    width: 100%;
+
+    min-height: 45px;
+
+    padding: 10px 12px;
+
+    border: 1px solid #334155;
+    border-radius: 10px;
+
+    outline: none;
+
+    background: #0f172a;
+    color: #f8fafc;
+
+    font-size: 14px;
+}
+
+.channel-form input:focus {
+    border-color: #60a5fa;
+}
+
+.form-actions {
+    display: flex;
+    gap: 8px;
+
+    margin-top: 4px;
+}
+
+.form-button {
+    flex: 1;
+
+    min-height: 44px;
+
+    border-radius: 10px;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+.form-save-button {
+    border: 0;
+
+    background: #2563eb;
+    color: white;
+}
+
+.form-cancel-button {
+    border: 1px solid #334155;
+
+    background: #172033;
+    color: #cbd5e1;
 }
 
 
@@ -334,7 +565,7 @@ body {
 }
 
 
-/* ---------- Buttons on touch devices ---------- */
+/* ---------- Touch ---------- */
 
 button {
     touch-action: manipulation;
