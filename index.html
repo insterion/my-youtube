@@ -3,14 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>My YouTube</title>
+
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <h1>MY YOUTUBE</h1>
+    <header class="app-header">
+        <div>
+            <h1>MY YOUTUBE</h1>
+            <p>Your personal YouTube tracker</p>
+        </div>
 
-    <p>Our YouTube project has started!</p>
+        <button class="settings-button" type="button" aria-label="Settings">
+            ⚙
+        </button>
+    </header>
+
+
+    <main class="app-content">
+
+        <section class="section-header">
+            <div>
+                <h2>New Videos</h2>
+                <span class="video-count">2 new</span>
+            </div>
+        </section>
+
+
+        <section class="video-list">
+
+            <!-- Video 1 -->
+            <article class="video-card">
+
+                <div class="thumbnail">
+                    <div class="thumbnail-placeholder">
+                        VIDEO
+                    </div>
+                </div>
+
+                <div class="video-info">
+
+                    <h3>Example New Video</h3>
+
+                    <p class="channel-name">
+                        Example Channel
+                    </p>
+
+                    <p class="video-date">
+                        12 Sep 2026 • 12 min
+                    </p>
+
+                    <div class="video-actions">
+
+                        <button class="action-button watch-button" type="button">
+                            ▶ Watch
+                        </button>
+
+                        <button class="action-button watched-button" type="button">
+                            ○ Watched
+                        </button>
+
+                    </div>
+
+                    <div class="video-actions secondary-actions">
+
+                        <button class="action-button download-button" type="button">
+                            ↓ Download
+                        </button>
+
+                        <button class="action-button save-button" type="button">
+                            ☆ Save
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </article>
+
+
+            <!-- Video 2 -->
+            <article class="video-card">
+
+                <div class="thumbnail">
+                    <div class="thumbnail-placeholder">
+                        VIDEO
+                    </div>
+                </div>
+
+                <div class="video-info">
+
+                    <h3>Another Example Video</h3>
+
+                    <p class="channel-name">
+                        Another Channel
+                    </p>
+
+                    <p class="video-date">
+                        11 Sep 2026 • 8 min
+                    </p>
+
+                    <div class="video-actions">
+
+                        <button class="action-button watch-button" type="button">
+                            ▶ Watch
+                        </button>
+
+                        <button class="action-button watched-button" type="button">
+                            ○ Watched
+                        </button>
+
+                    </div>
+
+                    <div class="video-actions secondary-actions">
+
+                        <button class="action-button download-button" type="button">
+                            ↓ Download
+                        </button>
+
+                        <button class="action-button save-button" type="button">
+                            ☆ Save
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </article>
+
+        </section>
+
+    </main>
+
+
+    <nav class="bottom-navigation">
+
+        <button class="nav-button active" type="button">
+            <span class="nav-icon">●</span>
+            <span>New</span>
+        </button>
+
+        <button class="nav-button" type="button">
+            <span class="nav-icon">☆</span>
+            <span>Saved</span>
+        </button>
+
+        <button class="nav-button" type="button">
+            <span class="nav-icon">✓</span>
+            <span>Watched</span>
+        </button>
+
+        <button class="nav-button" type="button">
+            <span class="nav-icon">▣</span>
+            <span>Channels</span>
+        </button>
+
+    </nav>
+
+
+    <script src="app.js"></script>
 
 </body>
 </html>
