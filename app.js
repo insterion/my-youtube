@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Version 0.4
+   Version 0.5
    ========================================= */
 
 
@@ -13,38 +13,23 @@ const videos = [
 
     {
         id: "example-video-1",
-
         title: "Example New Video",
-
         channel: "Example Channel",
-
         date: "12 Sep 2026",
-
         duration: "12 min",
-
         watched: false,
-
         saved: false,
-
         downloaded: false
     },
 
-
     {
         id: "example-video-2",
-
         title: "Another Example Video",
-
         channel: "Another Channel",
-
         date: "11 Sep 2026",
-
         duration: "8 min",
-
         watched: false,
-
         saved: false,
-
         downloaded: false
     }
 
@@ -95,7 +80,6 @@ function loadVideos() {
 
 
     if (!savedVideos) {
-
         return videos;
     }
 
@@ -107,7 +91,6 @@ function loadVideos() {
 
 
         if (!Array.isArray(parsedVideos)) {
-
             return videos;
         }
 
@@ -151,7 +134,6 @@ function loadChannels() {
 
 
     if (!savedChannels) {
-
         return [];
     }
 
@@ -163,7 +145,6 @@ function loadChannels() {
 
 
         if (!Array.isArray(parsedChannels)) {
-
             return [];
         }
 
@@ -227,15 +208,10 @@ function setupNavigation() {
                 () => {
 
                     const pages = [
-
                         "new",
-
                         "saved",
-
                         "watched",
-
                         "channels"
-
                     ];
 
 
@@ -361,7 +337,6 @@ function updateContent() {
 
 
     if (!videoList || !sectionTitle) {
-
         return;
     }
 
@@ -429,9 +404,7 @@ function updateContent() {
         visibleVideos
             .map(
                 video =>
-                    createVideoCard(
-                        video
-                    )
+                    createVideoCard(video)
             )
             .join("");
 
@@ -785,12 +758,6 @@ function toggleDownloaded(videoId) {
         return;
     }
 
-
-    /*
-       This only changes the status.
-
-       No actual file is downloaded.
-    */
 
     video.downloaded =
         !video.downloaded;
@@ -1154,40 +1121,68 @@ function showAddChannelForm() {
 
 function isYouTubeUrl(url) {
 
+    let parsedUrl;
+
+
     try {
 
-        const parsedUrl =
+        parsedUrl =
             new URL(url);
-
-
-        const hostname =
-            parsedUrl.hostname
-                .toLowerCase();
-
-
-        const allowedHosts = [
-
-            "youtube.com",
-
-            "www.youtube.com",
-
-            "m.youtube.com",
-
-            "youtu.be",
-
-            "www.youtu.be"
-
-        ];
-
-
-        return allowedHosts.includes(
-            hostname
-        );
 
     } catch (error) {
 
         return false;
     }
+
+
+    const hostname =
+        parsedUrl.hostname
+            .toLowerCase()
+            .replace(
+                /^www\./,
+                ""
+            );
+
+
+    const isYouTubeHost =
+        hostname === "youtube.com" ||
+        hostname === "m.youtube.com" ||
+        hostname === "youtu.be";
+
+
+    if (!isYouTubeHost) {
+
+        return false;
+    }
+
+
+    /*
+       A normal YouTube channel can use:
+       
+       https://youtube.com/@channel
+       https://youtube.com/channel/...
+       https://youtube.com/c/...
+       https://youtube.com/user/...
+    */
+
+    const path =
+        parsedUrl.pathname;
+
+
+    const isChannelPath =
+        path.startsWith("/@") ||
+        path.startsWith("/channel/") ||
+        path.startsWith("/c/") ||
+        path.startsWith("/user/");
+
+
+    if (!isChannelPath) {
+
+        return false;
+    }
+
+
+    return true;
 }
 
 
@@ -1245,7 +1240,7 @@ function saveNewChannel() {
     if (!isYouTubeUrl(url)) {
 
         alert(
-            "Please enter a valid YouTube URL."
+            "Please enter a valid YouTube channel URL."
         );
 
         return;
@@ -1340,7 +1335,7 @@ function setupChannelButtons() {
 
 
 /* =========================================
-   DELETE CHANNEL
+   DELETE CHANNEL ACTION
    ========================================= */
 
 function deleteChannel(channelId) {
