@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application stylesheet
-   Version 0.9
+   Version 1.0
    ========================================= */
 
 
@@ -16,6 +16,7 @@
 html {
     margin: 0;
     padding: 0;
+
     background: #0b1120;
 }
 
@@ -45,15 +46,18 @@ body {
 
 .app-header {
     display: flex;
+
     align-items: center;
+
     justify-content: space-between;
 
     position: sticky;
+
     top: 0;
 
     z-index: 20;
 
-    padding: 18px 18px 14px;
+    padding: 18px;
 
     background: #111827;
 
@@ -65,6 +69,7 @@ body {
     margin: 0;
 
     font-size: 22px;
+
     font-weight: 700;
 
     letter-spacing: 1px;
@@ -80,6 +85,7 @@ body {
 
 .settings-button {
     width: 42px;
+
     height: 42px;
 
     border:
@@ -106,6 +112,7 @@ body {
 
 .app-content {
     width: 100%;
+
     max-width: 760px;
 
     margin: 0 auto;
@@ -120,7 +127,9 @@ body {
 
 .section-header {
     display: flex;
+
     align-items: center;
+
     justify-content: space-between;
 
     gap: 12px;
@@ -132,6 +141,7 @@ body {
     margin: 0;
 
     font-size: 20px;
+
     font-weight: 700;
 }
 
@@ -177,7 +187,8 @@ body {
 }
 
 .refresh-button:active {
-    transform: scale(0.97);
+    transform:
+        scale(0.97);
 }
 
 .refresh-button:disabled {
@@ -249,6 +260,7 @@ body {
     display: block;
 
     width: 100%;
+
     height: 100%;
 
     object-fit: cover;
@@ -256,6 +268,7 @@ body {
 
 .thumbnail-placeholder {
     width: 100%;
+
     height: 100%;
 
     display: flex;
@@ -314,7 +327,7 @@ body {
 
 
 /* =========================================
-   VIDEO BUTTONS
+   VIDEO ACTIONS
    ========================================= */
 
 .video-actions {
@@ -359,7 +372,8 @@ body {
 }
 
 .action-button:active {
-    transform: scale(0.97);
+    transform:
+        scale(0.97);
 }
 
 
@@ -387,7 +401,8 @@ body {
 .watched-button.is-active {
     color: #86efac;
 
-    border-color: #166534;
+    border-color:
+        #166534;
 
     background: #10251a;
 }
@@ -404,7 +419,8 @@ body {
 .download-button.is-active {
     color: #86efac;
 
-    border-color: #166534;
+    border-color:
+        #166534;
 
     background: #10251a;
 }
@@ -421,7 +437,8 @@ body {
 .save-button.is-active {
     color: #facc15;
 
-    border-color: #854d0e;
+    border-color:
+        #854d0e;
 
     background: #261f0b;
 }
@@ -507,6 +524,7 @@ body {
 
 .channel-thumbnail {
     width: 48px;
+
     height: 48px;
 
     flex: 0 0 48px;
@@ -681,7 +699,8 @@ body {
 }
 
 .channel-form input:focus {
-    border-color: #60a5fa;
+    border-color:
+        #60a5fa;
 }
 
 .api-key-saved {
@@ -735,6 +754,249 @@ body {
     background: #172033;
 
     color: #cbd5e1;
+}
+
+
+/* =========================================
+   SETTINGS OVERLAY
+   ========================================= */
+
+.settings-overlay {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 100;
+
+    display: flex;
+
+    align-items: flex-start;
+
+    justify-content: center;
+
+    padding: 70px 14px 20px;
+
+    background:
+        rgba(
+            2,
+            6,
+            23,
+            0.78
+        );
+
+    overflow-y: auto;
+}
+
+.settings-modal {
+    width: 100%;
+
+    max-width: 520px;
+
+    background: #111827;
+
+    border:
+        1px solid #334155;
+
+    border-radius: 18px;
+
+    box-shadow:
+        0 20px 50px
+        rgba(
+            0,
+            0,
+            0,
+            0.45
+        );
+
+    overflow: hidden;
+}
+
+.settings-header {
+    display: flex;
+
+    align-items: flex-start;
+
+    justify-content: space-between;
+
+    gap: 12px;
+
+    padding: 18px;
+
+    border-bottom:
+        1px solid #1f2937;
+}
+
+.settings-header h2 {
+    margin: 0;
+
+    font-size: 20px;
+}
+
+.settings-header p {
+    margin: 4px 0 0;
+
+    color: #94a3b8;
+
+    font-size: 13px;
+}
+
+.settings-close-button {
+    width: 40px;
+
+    height: 40px;
+
+    flex: 0 0 40px;
+
+    border:
+        1px solid #334155;
+
+    border-radius: 10px;
+
+    background: #172033;
+
+    color: #cbd5e1;
+
+    font-size: 24px;
+
+    line-height: 1;
+
+    cursor: pointer;
+}
+
+.settings-section {
+    padding: 18px;
+
+    border-bottom:
+        1px solid #1f2937;
+}
+
+.settings-section h3 {
+    margin: 0 0 10px;
+
+    font-size: 16px;
+}
+
+.settings-description {
+    margin: 8px 0 0;
+
+    color: #94a3b8;
+
+    font-size: 13px;
+}
+
+.settings-status {
+    margin-bottom: 12px;
+
+    padding: 10px 12px;
+
+    border-radius: 10px;
+
+    font-size: 13px;
+
+    font-weight: 600;
+}
+
+.settings-status-ok {
+    background: #10251a;
+
+    color: #86efac;
+
+    border:
+        1px solid #166534;
+}
+
+.settings-status-warning {
+    background: #261f0b;
+
+    color: #facc15;
+
+    border:
+        1px solid #854d0e;
+}
+
+.settings-action-button,
+.settings-danger-button {
+    width: 100%;
+
+    min-height: 44px;
+
+    margin-top: 8px;
+
+    padding: 10px 14px;
+
+    border-radius: 10px;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+.settings-action-button {
+    border:
+        1px solid #334155;
+
+    background: #172033;
+
+    color: #93c5fd;
+}
+
+.settings-danger-button {
+    border:
+        1px solid #7f1d1d;
+
+    background: #3f1212;
+
+    color: #fca5a5;
+}
+
+.settings-input-label {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 7px;
+
+    color: #cbd5e1;
+
+    font-size: 13px;
+
+    font-weight: 600;
+}
+
+.settings-input-label input {
+    width: 100%;
+
+    min-height: 46px;
+
+    padding: 10px 12px;
+
+    border:
+        1px solid #334155;
+
+    border-radius: 10px;
+
+    outline: none;
+
+    background: #0f172a;
+
+    color: #f8fafc;
+
+    font-size: 14px;
+}
+
+.settings-input-label input:focus {
+    border-color:
+        #60a5fa;
+}
+
+.settings-footer {
+    display: flex;
+
+    gap: 8px;
+
+    padding: 16px;
 }
 
 
