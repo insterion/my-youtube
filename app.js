@@ -1,14 +1,14 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Version 0.8
+   Version 0.9
 
-   New in this version:
-   - Multiple YouTube channels
-   - Videos from all channels
-   - Refresh All Channels
-   - Correct publishing dates
-   - Preserves Watched / Saved / Downloaded
+   Added:
+   - Multiple channels
+   - Refresh all channels
+   - Automatic refresh
+   - Refresh button
+   - Preserves watched/saved/downloaded
    ========================================= */
 
 
@@ -28,6 +28,17 @@ const PAGE_STORAGE_KEY =
 const API_KEY_STORAGE_KEY =
     "my-youtube-api-key";
 
+const LAST_REFRESH_KEY =
+    "my-youtube-last-refresh";
+
+
+/* =========================================
+   SETTINGS
+   ========================================= */
+
+const AUTO_REFRESH_INTERVAL =
+    30 * 60 * 1000;
+
 
 /* =========================================
    DATA
@@ -41,6 +52,9 @@ let currentPage =
     localStorage.getItem(
         PAGE_STORAGE_KEY
     ) || "new";
+
+let refreshInProgress =
+    false;
 
 
 /* =========================================
@@ -85,7 +99,6 @@ function loadVideos() {
 
 
     if (!saved) {
-
         return [];
     }
 
@@ -97,7 +110,6 @@ function loadVideos() {
 
 
         if (!Array.isArray(parsed)) {
-
             return [];
         }
 
@@ -138,7 +150,6 @@ function loadChannels() {
 
 
     if (!saved) {
-
         return [];
     }
 
@@ -150,7 +161,6 @@ function loadChannels() {
 
 
         if (!Array.isArray(parsed)) {
-
             return [];
         }
 
@@ -179,7 +189,50 @@ function saveChannels() {
 
 
 /* =========================================
-   PAGE STORAGE
+   REFRESH STORAGE
+   ========================================= */
+
+function getLastRefreshTime() {
+
+    const value =
+        localStorage.getItem(
+            LAST_REFRESH_KEY
+        );
+
+
+    if (!value) {
+        return 0;
+    }
+
+
+    const time =
+        Number(value);
+
+
+    if (
+        Number.isNaN(time)
+    ) {
+        return 0;
+    }
+
+
+    return time;
+}
+
+
+function saveLastRefreshTime() {
+
+    localStorage.setItem(
+        LAST_REFRESH_KEY,
+        String(
+            Date.now()
+        )
+    );
+}
+
+
+/* =========================================
+   CURRENT PAGE
    ========================================= */
 
 function saveCurrentPage() {
@@ -211,15 +264,10 @@ function setupNavigation() {
                 () => {
 
                     const pages = [
-
                         "new",
-
                         "saved",
-
                         "watched",
-
                         "channels"
-
                     ];
 
 
@@ -263,11 +311,8 @@ function updateNavigation() {
     const pageIndexes = {
 
         new: 0,
-
         saved: 1,
-
         watched: 2,
-
         channels: 3
 
     };
@@ -347,7 +392,7 @@ function sortVideos() {
             second
         ) => {
 
-            const firstTime =
+            const firstDate =
                 new Date(
                     first.publishedAt ||
                     first.date ||
@@ -355,7 +400,7 @@ function sortVideos() {
                 ).getTime();
 
 
-            const secondTime =
+            const secondDate =
                 new Date(
                     second.publishedAt ||
                     second.date ||
@@ -364,8 +409,8 @@ function sortVideos() {
 
 
             return (
-                secondTime -
-                firstTime
+                secondDate -
+                firstDate
             );
         }
     );
@@ -394,7 +439,6 @@ function updateContent() {
         !videoList ||
         !sectionTitle
     ) {
-
         return;
     }
 
@@ -434,6 +478,9 @@ function updateContent() {
         sectionTitle.textContent =
             "Watched Videos";
     }
+
+
+    addRefreshButton();
 
 
     const visibleVideos =
@@ -490,7 +537,85 @@ function updateContent() {
 
 
 /* =========================================
-   CREATE VIDEO CARD
+   REFRESH BUTTON
+   ========================================= */
+
+function addRefreshButton() {
+
+    const sectionHeader =
+        document.querySelector(
+            ".section-header"
+        );
+
+
+    if (!sectionHeader) {
+        return;
+    }
+
+
+    const existingButton =
+        document.getElementById(
+            "refresh-page-button"
+        );
+
+
+    if (
+        currentPage ===
+        "channels"
+    ) {
+
+        if (existingButton) {
+            existingButton.remove();
+        }
+
+        return;
+    }
+
+
+    if (existingButton) {
+        return;
+    }
+
+
+    const button =
+        document.createElement(
+            "button"
+        );
+
+
+    button.id =
+        "refresh-page-button";
+
+
+    button.className =
+        "refresh-button";
+
+
+    button.type =
+        "button";
+
+
+    button.textContent =
+        "↻ Refresh";
+
+
+    button.addEventListener(
+        "click",
+        () =>
+            refreshAllChannels(
+                false
+            )
+    );
+
+
+    sectionHeader.appendChild(
+        button
+    );
+}
+
+
+/* =========================================
+   VIDEO CARD
    ========================================= */
 
 function createVideoCard(video) {
@@ -580,7 +705,7 @@ function createVideoCard(video) {
                         video.duration
                             ? `• ${escapeHtml(
                                 video.duration
-                            )}`
+                              )}`
                             : ""
                     }
 
@@ -649,7 +774,7 @@ function createVideoCard(video) {
 
 
 /* =========================================
-   SAFE HTML
+   HTML SAFETY
    ========================================= */
 
 function escapeHtml(text) {
@@ -787,10 +912,12 @@ function setupVideoButtons() {
 
 
 /* =========================================
-   WATCH VIDEO
+   WATCH
    ========================================= */
 
-function watchVideo(videoId) {
+function watchVideo(
+    videoId
+) {
 
     const video =
         videos.find(
@@ -908,7 +1035,7 @@ function toggleDownloaded(
 
 
     /*
-       This is currently only a status.
+       This is still only a status.
 
        Actual downloading will be
        implemented separately.
@@ -921,501 +1048,6 @@ function toggleDownloaded(
     saveVideos();
 
     updateContent();
-}
-
-
-/* =========================================
-   NEW VIDEO COUNT
-   ========================================= */
-
-function updateNewVideoCount() {
-
-    const countElement =
-        document.querySelector(
-            ".video-count"
-        );
-
-
-    if (!countElement) {
-        return;
-    }
-
-
-    if (
-        currentPage ===
-        "channels"
-    ) {
-
-        countElement.textContent =
-            `${channels.length} channels`;
-
-        return;
-    }
-
-
-    const newCount =
-        videos.filter(
-            video =>
-                !video.watched
-        ).length;
-
-
-    if (
-        newCount === 1
-    ) {
-
-        countElement.textContent =
-            "1 new";
-
-    } else {
-
-        countElement.textContent =
-            `${newCount} new`;
-    }
-}
-
-
-/* =========================================
-   CHANNELS PAGE
-   ========================================= */
-
-function renderChannelsPage() {
-
-    const videoList =
-        document.querySelector(
-            ".video-list"
-        );
-
-
-    const sectionTitle =
-        document.querySelector(
-            ".section-header h2"
-        );
-
-
-    if (
-        !videoList ||
-        !sectionTitle
-    ) {
-
-        return;
-    }
-
-
-    sectionTitle.textContent =
-        "Channels";
-
-
-    if (
-        channels.length === 0
-    ) {
-
-        videoList.innerHTML = `
-
-            <div class="empty-state">
-
-                <div class="empty-icon">
-                    ▣
-                </div>
-
-                <h3>
-                    No channels yet
-                </h3>
-
-                <p>
-                    Add a YouTube channel
-                    to start following it.
-                </p>
-
-                <button
-                    class="add-channel-button"
-                    type="button"
-                >
-                    + Add channel
-                </button>
-
-            </div>
-
-        `;
-
-
-        setupAddChannelButton();
-
-        updateNewVideoCount();
-
-        return;
-    }
-
-
-    videoList.innerHTML = `
-
-        <button
-            class="add-channel-button"
-            type="button"
-        >
-            + Add channel
-        </button>
-
-
-        <button
-            class="add-channel-button"
-            id="refresh-all-channels-button"
-            type="button"
-        >
-            ↻ Refresh All Channels
-        </button>
-
-
-        <div class="channel-list">
-
-            ${channels
-                .map(
-                    channel =>
-                        createChannelCard(
-                            channel
-                        )
-                )
-                .join("")
-            }
-
-        </div>
-
-    `;
-
-
-    setupAddChannelButton();
-
-    setupChannelButtons();
-
-    setupRefreshAllChannelsButton();
-
-    updateNewVideoCount();
-}
-
-
-/* =========================================
-   CHANNEL CARD
-   ========================================= */
-
-function createChannelCard(
-    channel
-) {
-
-    const statusText =
-        channel.verified
-            ? "✓ Connected to YouTube"
-            : "Local channel";
-
-
-    const thumbnailHtml =
-        channel.thumbnail
-            ? `
-
-                <img
-                    class="channel-thumbnail"
-                    src="${escapeHtml(
-                        channel.thumbnail
-                    )}"
-                    alt=""
-                >
-
-            `
-            : "";
-
-
-    return `
-
-        <article
-            class="channel-card"
-            data-channel-id="${escapeHtml(
-                channel.id
-            )}"
-        >
-
-            <div
-                class="channel-card-header"
-            >
-
-                ${thumbnailHtml}
-
-
-                <div>
-
-                    <h3
-                        class="channel-card-name"
-                    >
-
-                        ${escapeHtml(
-                            channel.name
-                        )}
-
-                    </h3>
-
-
-                    <p
-                        class="channel-card-url"
-                    >
-
-                        ${escapeHtml(
-                            statusText
-                        )}
-
-                    </p>
-
-
-                    ${
-                        channel.lastUpdated
-                            ? `
-
-                                <p
-                                    class="channel-card-url"
-                                >
-
-                                    Last checked:
-                                    ${escapeHtml(
-                                        channel.lastUpdated
-                                    )}
-
-                                </p>
-
-                              `
-                            : ""
-                    }
-
-                </div>
-
-            </div>
-
-
-            <div
-                class="channel-card-actions"
-            >
-
-                <button
-                    class="channel-delete-button"
-                    type="button"
-                >
-                    Delete channel
-                </button>
-
-            </div>
-
-        </article>
-
-    `;
-}
-
-
-/* =========================================
-   ADD CHANNEL
-   ========================================= */
-
-function setupAddChannelButton() {
-
-    const buttons =
-        document.querySelectorAll(
-            ".add-channel-button"
-        );
-
-
-    buttons.forEach(
-        button => {
-
-            if (
-                button.id ===
-                "refresh-all-channels-button"
-            ) {
-
-                return;
-            }
-
-
-            button.addEventListener(
-                "click",
-                showAddChannelForm
-            );
-
-        }
-    );
-}
-
-
-/* =========================================
-   REFRESH BUTTON
-   ========================================= */
-
-function setupRefreshAllChannelsButton() {
-
-    const button =
-        document.getElementById(
-            "refresh-all-channels-button"
-        );
-
-
-    if (!button) {
-        return;
-    }
-
-
-    button.addEventListener(
-        "click",
-        refreshAllChannels
-    );
-}
-
-
-/* =========================================
-   ADD CHANNEL FORM
-   ========================================= */
-
-function showAddChannelForm() {
-
-    const videoList =
-        document.querySelector(
-            ".video-list"
-        );
-
-
-    if (!videoList) {
-        return;
-    }
-
-
-    if (
-        document.querySelector(
-            ".channel-form"
-        )
-    ) {
-
-        return;
-    }
-
-
-    const existingApiKey =
-        getApiKey();
-
-
-    const apiKeyHtml =
-        existingApiKey
-            ? `
-
-                <p class="api-key-saved">
-                    ✓ API key already saved
-                </p>
-
-            `
-            : `
-
-                <label>
-
-                    YouTube API key
-
-                    <input
-                        type="password"
-                        id="youtube-api-key-input"
-                        placeholder="Paste your API key here"
-                        autocomplete="off"
-                    >
-
-                </label>
-
-            `;
-
-
-    const form =
-        document.createElement(
-            "div"
-        );
-
-
-    form.className =
-        "channel-form";
-
-
-    form.innerHTML = `
-
-        <h3>
-            Add YouTube Channel
-        </h3>
-
-
-        <label>
-
-            YouTube channel URL
-
-            <input
-                type="url"
-                id="channel-url-input"
-                placeholder="https://youtube.com/@channel"
-                autocomplete="off"
-            >
-
-        </label>
-
-
-        ${apiKeyHtml}
-
-
-        <div
-            class="form-actions"
-        >
-
-            <button
-                class="form-button form-save-button"
-                id="save-channel-button"
-                type="button"
-            >
-                Find channel
-            </button>
-
-
-            <button
-                class="form-button form-cancel-button"
-                id="cancel-channel-button"
-                type="button"
-            >
-                Cancel
-            </button>
-
-        </div>
-
-    `;
-
-
-    videoList.prepend(
-        form
-    );
-
-
-    const saveButton =
-        document.getElementById(
-            "save-channel-button"
-        );
-
-
-    const cancelButton =
-        document.getElementById(
-            "cancel-channel-button"
-        );
-
-
-    if (saveButton) {
-
-        saveButton.addEventListener(
-            "click",
-            connectYouTubeChannel
-        );
-    }
-
-
-    if (cancelButton) {
-
-        cancelButton.addEventListener(
-            "click",
-            () =>
-                updateContent()
-        );
-    }
 }
 
 
@@ -1485,7 +1117,8 @@ function parseYouTubeChannelUrl(
 
         return {
 
-            valid: true,
+            valid:
+                true,
 
             type:
                 "handle",
@@ -1505,7 +1138,8 @@ function parseYouTubeChannelUrl(
 
         return {
 
-            valid: true,
+            valid:
+                true,
 
             type:
                 "id",
@@ -1527,7 +1161,8 @@ function parseYouTubeChannelUrl(
 
         return {
 
-            valid: true,
+            valid:
+                true,
 
             type:
                 "username",
@@ -1867,6 +1502,9 @@ async function loadChannelVideos(
                             ?.title ||
                         "Unknown channel",
 
+                    channelId:
+                        channel.id,
+
                     date:
                         formatYouTubeDate(
                             publishedAt
@@ -1917,10 +1555,240 @@ async function loadChannelVideos(
                             ?.default
                             ?.url ||
 
-                        "",
+                        ""
+
+                };
+
+            }
+        )
+
+        .filter(Boolean);
+}
+
+
+/* =========================================
+   LOAD CHANNEL VIDEOS USING SAVED PLAYLIST
+   ========================================= */
+
+async function loadVideosFromSavedChannel(
+    savedChannel
+) {
+
+    if (
+        !savedChannel.uploadsPlaylistId
+    ) {
+
+        const parsedUrl =
+            parseYouTubeChannelUrl(
+                savedChannel.originalUrl ||
+                savedChannel.url
+            );
+
+
+        if (!parsedUrl.valid) {
+
+            throw new Error(
+                "CHANNEL_NOT_FOUND"
+            );
+        }
+
+
+        const channel =
+            await findYouTubeChannel(
+                parsedUrl
+            );
+
+
+        return loadChannelVideos(
+            channel
+        );
+    }
+
+
+    const playlistResponse =
+        await youtubeApiRequest(
+            "playlistItems",
+            {
+
+                part:
+                    "snippet,contentDetails",
+
+                playlistId:
+                    savedChannel.uploadsPlaylistId,
+
+                maxResults:
+                    "10"
+
+            }
+        );
+
+
+    if (
+        !playlistResponse.items
+    ) {
+
+        return [];
+    }
+
+
+    const videoIds =
+        playlistResponse.items
+
+            .map(
+                item =>
+                    item
+                        ?.contentDetails
+                        ?.videoId
+            )
+
+            .filter(Boolean);
+
+
+    if (
+        videoIds.length === 0
+    ) {
+
+        return [];
+    }
+
+
+    const videoResponse =
+        await youtubeApiRequest(
+            "videos",
+            {
+
+                part:
+                    "snippet,contentDetails",
+
+                id:
+                    videoIds.join(",")
+
+            }
+        );
+
+
+    const videoMap =
+        new Map();
+
+
+    if (
+        videoResponse.items
+    ) {
+
+        videoResponse.items.forEach(
+            item => {
+
+                videoMap.set(
+                    item.id,
+                    item
+                );
+
+            }
+        );
+    }
+
+
+    return playlistResponse.items
+
+        .map(
+            item => {
+
+                const videoId =
+                    item
+                        ?.contentDetails
+                        ?.videoId;
+
+
+                if (!videoId) {
+                    return null;
+                }
+
+
+                const details =
+                    videoMap.get(
+                        videoId
+                    );
+
+
+                const snippet =
+                    item.snippet;
+
+
+                const publishedAt =
+                    snippet
+                        ?.publishedAt ||
+                    "";
+
+
+                return {
+
+                    id:
+                        videoId,
+
+                    title:
+                        snippet?.title ||
+                        "Untitled video",
+
+                    channel:
+                        snippet?.channelTitle ||
+                        savedChannel.name ||
+                        "Unknown channel",
 
                     channelId:
-                        channel.id
+                        savedChannel.id,
+
+                    date:
+                        formatYouTubeDate(
+                            publishedAt
+                        ),
+
+                    publishedAt:
+                        publishedAt,
+
+                    duration:
+                        details
+                            ? formatDuration(
+                                details
+                                    ?.contentDetails
+                                    ?.duration
+                            )
+                            : "",
+
+                    watched:
+                        false,
+
+                    saved:
+                        false,
+
+                    downloaded:
+                        false,
+
+                    youtubeUrl:
+                        `https://www.youtube.com/watch?v=${videoId}`,
+
+                    thumbnail:
+                        snippet
+                            ?.thumbnails
+                            ?.maxres
+                            ?.url ||
+
+                        snippet
+                            ?.thumbnails
+                            ?.high
+                            ?.url ||
+
+                        snippet
+                            ?.thumbnails
+                            ?.medium
+                            ?.url ||
+
+                        snippet
+                            ?.thumbnails
+                            ?.default
+                            ?.url ||
+
+                        ""
+
                 };
 
             }
@@ -2087,7 +1955,7 @@ function mergeVideo(
     }
 
 
-    const existingVideo =
+    const oldVideo =
         videos[
             existingIndex
         ];
@@ -2097,7 +1965,7 @@ function mergeVideo(
         existingIndex
     ] = {
 
-        ...existingVideo,
+        ...oldVideo,
 
         title:
             newVideo.title,
@@ -2124,6 +1992,863 @@ function mergeVideo(
             newVideo.thumbnail
 
     };
+}
+
+
+/* =========================================
+   REFRESH ALL CHANNELS
+   ========================================= */
+
+async function refreshAllChannels(
+    silent = false
+) {
+
+    if (
+        refreshInProgress
+    ) {
+
+        return;
+    }
+
+
+    if (
+        channels.length === 0
+    ) {
+
+        if (!silent) {
+
+            alert(
+                "There are no channels to refresh."
+            );
+        }
+
+        return;
+    }
+
+
+    if (!getApiKey()) {
+
+        if (!silent) {
+
+            alert(
+                "No YouTube API key has been saved."
+            );
+        }
+
+        return;
+    }
+
+
+    refreshInProgress =
+        true;
+
+
+    updateRefreshButtons(
+        true
+    );
+
+
+    let successfulChannels =
+        0;
+
+    let failedChannels =
+        0;
+
+    let totalVideos =
+        0;
+
+
+    try {
+
+        for (
+            const channel
+            of channels
+        ) {
+
+            try {
+
+                const latestVideos =
+                    await loadVideosFromSavedChannel(
+                        channel
+                    );
+
+
+                latestVideos.forEach(
+                    video =>
+                        mergeVideo(
+                            video
+                        )
+                );
+
+
+                totalVideos +=
+                    latestVideos.length;
+
+
+                successfulChannels++;
+
+
+                channel.lastUpdated =
+                    formatDateTime(
+                        new Date()
+                    );
+
+
+            } catch (error) {
+
+                console.log(
+                    `Could not refresh ${channel.name}:`,
+                    error
+                );
+
+
+                failedChannels++;
+            }
+
+        }
+
+
+        sortVideos();
+
+        saveVideos();
+
+        saveChannels();
+
+        saveLastRefreshTime();
+
+
+        updateContent();
+
+
+        if (!silent) {
+
+            alert(
+
+                `Refresh complete.\n\n` +
+
+                `Channels updated: ${successfulChannels}\n` +
+
+                `Channels with errors: ${failedChannels}\n` +
+
+                `Videos received: ${totalVideos}`
+
+            );
+        }
+
+
+    } finally {
+
+        refreshInProgress =
+            false;
+
+        updateRefreshButtons(
+            false
+        );
+    }
+}
+
+
+/* =========================================
+   REFRESH BUTTON STATE
+   ========================================= */
+
+function updateRefreshButtons(
+    refreshing
+) {
+
+    const pageButton =
+        document.getElementById(
+            "refresh-page-button"
+        );
+
+
+    const channelsButton =
+        document.getElementById(
+            "refresh-all-channels-button"
+        );
+
+
+    if (pageButton) {
+
+        pageButton.disabled =
+            refreshing;
+
+        pageButton.textContent =
+            refreshing
+                ? "Refreshing..."
+                : "↻ Refresh";
+    }
+
+
+    if (channelsButton) {
+
+        channelsButton.disabled =
+            refreshing;
+
+        channelsButton.textContent =
+            refreshing
+                ? "Refreshing..."
+                : "↻ Refresh All Channels";
+    }
+}
+
+
+/* =========================================
+   AUTO REFRESH
+   ========================================= */
+
+async function maybeAutoRefresh() {
+
+    if (
+        channels.length === 0
+    ) {
+        return;
+    }
+
+
+    if (
+        !getApiKey()
+    ) {
+        return;
+    }
+
+
+    const lastRefresh =
+        getLastRefreshTime();
+
+
+    const now =
+        Date.now();
+
+
+    if (
+        now -
+        lastRefresh <
+        AUTO_REFRESH_INTERVAL
+    ) {
+
+        return;
+    }
+
+
+    await refreshAllChannels(
+        true
+    );
+}
+
+
+/* =========================================
+   PERIODIC AUTO REFRESH
+   ========================================= */
+
+function startAutomaticRefresh() {
+
+    setInterval(
+        () => {
+
+            refreshAllChannels(
+                true
+            );
+
+        },
+        AUTO_REFRESH_INTERVAL
+    );
+}
+
+
+/* =========================================
+   LAST REFRESH DISPLAY
+   ========================================= */
+
+function getLastRefreshText() {
+
+    const lastRefresh =
+        getLastRefreshTime();
+
+
+    if (!lastRefresh) {
+        return "";
+    }
+
+
+    const date =
+        new Date(
+            lastRefresh
+        );
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return "";
+    }
+
+
+    return (
+        "Last refresh: " +
+        formatDateTime(
+            date
+        )
+    );
+}
+
+
+/* =========================================
+   FORMAT DATE + TIME
+   ========================================= */
+
+function formatDateTime(
+    date
+) {
+
+    if (!date) {
+        return "";
+    }
+
+
+    return date.toLocaleString(
+        "en-GB",
+        {
+
+            day:
+                "2-digit",
+
+            month:
+                "short",
+
+            year:
+                "numeric",
+
+            hour:
+                "2-digit",
+
+            minute:
+                "2-digit"
+
+        }
+    );
+}
+
+
+/* =========================================
+   NEW VIDEO COUNT
+   ========================================= */
+
+function updateNewVideoCount() {
+
+    const countElement =
+        document.querySelector(
+            ".video-count"
+        );
+
+
+    if (!countElement) {
+        return;
+    }
+
+
+    if (
+        currentPage ===
+        "channels"
+    ) {
+
+        countElement.textContent =
+            `${channels.length} channels`;
+
+        return;
+    }
+
+
+    const newCount =
+        videos.filter(
+            video =>
+                !video.watched
+        ).length;
+
+
+    if (
+        newCount === 1
+    ) {
+
+        countElement.textContent =
+            "1 new";
+
+    } else {
+
+        countElement.textContent =
+            `${newCount} new`;
+    }
+}
+
+
+/* =========================================
+   CHANNELS PAGE
+   ========================================= */
+
+function renderChannelsPage() {
+
+    const videoList =
+        document.querySelector(
+            ".video-list"
+        );
+
+
+    const sectionTitle =
+        document.querySelector(
+            ".section-header h2"
+        );
+
+
+    if (
+        !videoList ||
+        !sectionTitle
+    ) {
+
+        return;
+    }
+
+
+    sectionTitle.textContent =
+        "Channels";
+
+
+    const refreshPageButton =
+        document.getElementById(
+            "refresh-page-button"
+        );
+
+
+    if (
+        refreshPageButton
+    ) {
+
+        refreshPageButton.remove();
+    }
+
+
+    if (
+        channels.length === 0
+    ) {
+
+        videoList.innerHTML = `
+
+            <div class="empty-state">
+
+                <div class="empty-icon">
+                    ▣
+                </div>
+
+                <h3>
+                    No channels yet
+                </h3>
+
+                <p>
+                    Add a YouTube channel
+                    to start following it.
+                </p>
+
+                <button
+                    class="add-channel-button"
+                    type="button"
+                >
+                    + Add channel
+                </button>
+
+            </div>
+
+        `;
+
+
+        setupAddChannelButton();
+
+        updateNewVideoCount();
+
+        return;
+    }
+
+
+    videoList.innerHTML = `
+
+        <button
+            class="add-channel-button"
+            type="button"
+        >
+            + Add channel
+        </button>
+
+
+        <button
+            class="add-channel-button"
+            id="refresh-all-channels-button"
+            type="button"
+        >
+            ↻ Refresh All Channels
+        </button>
+
+
+        <div class="channel-last-refresh">
+            ${escapeHtml(
+                getLastRefreshText()
+            )}
+        </div>
+
+
+        <div class="channel-list">
+
+            ${channels
+                .map(
+                    channel =>
+                        createChannelCard(
+                            channel
+                        )
+                )
+                .join("")
+            }
+
+        </div>
+
+    `;
+
+
+    setupAddChannelButton();
+
+    setupChannelButtons();
+
+    setupRefreshAllChannelsButton();
+
+    updateNewVideoCount();
+}
+
+
+/* =========================================
+   CHANNEL CARD
+   ========================================= */
+
+function createChannelCard(
+    channel
+) {
+
+    const statusText =
+        channel.verified
+            ? "✓ Connected to YouTube"
+            : "Local channel";
+
+
+    const thumbnailHtml =
+        channel.thumbnail
+            ? `
+
+                <img
+                    class="channel-thumbnail"
+                    src="${escapeHtml(
+                        channel.thumbnail
+                    )}"
+                    alt=""
+                >
+
+            `
+            : "";
+
+
+    return `
+
+        <article
+            class="channel-card"
+            data-channel-id="${escapeHtml(
+                channel.id
+            )}"
+        >
+
+            <div
+                class="channel-card-header"
+            >
+
+                ${thumbnailHtml}
+
+
+                <div>
+
+                    <h3
+                        class="channel-card-name"
+                    >
+
+                        ${escapeHtml(
+                            channel.name
+                        )}
+
+                    </h3>
+
+
+                    <p
+                        class="channel-card-url"
+                    >
+
+                        ${escapeHtml(
+                            statusText
+                        )}
+
+                    </p>
+
+
+                    ${
+                        channel.lastUpdated
+                            ? `
+
+                                <p
+                                    class="channel-card-url"
+                                >
+
+                                    Checked:
+                                    ${escapeHtml(
+                                        channel.lastUpdated
+                                    )}
+
+                                </p>
+
+                              `
+                            : ""
+                    }
+
+                </div>
+
+            </div>
+
+
+            <div
+                class="channel-card-actions"
+            >
+
+                <button
+                    class="channel-delete-button"
+                    type="button"
+                >
+                    Delete channel
+                </button>
+
+            </div>
+
+        </article>
+
+    `;
+}
+
+
+/* =========================================
+   ADD CHANNEL BUTTON
+   ========================================= */
+
+function setupAddChannelButton() {
+
+    const buttons =
+        document.querySelectorAll(
+            ".add-channel-button"
+        );
+
+
+    buttons.forEach(
+        button => {
+
+            if (
+                button.id ===
+                "refresh-all-channels-button"
+            ) {
+
+                return;
+            }
+
+
+            button.addEventListener(
+                "click",
+                showAddChannelForm
+            );
+
+        }
+    );
+}
+
+
+/* =========================================
+   REFRESH ALL CHANNELS BUTTON
+   ========================================= */
+
+function setupRefreshAllChannelsButton() {
+
+    const button =
+        document.getElementById(
+            "refresh-all-channels-button"
+        );
+
+
+    if (!button) {
+        return;
+    }
+
+
+    button.addEventListener(
+        "click",
+        () =>
+            refreshAllChannels(
+                false
+            )
+    );
+}
+
+
+/* =========================================
+   ADD CHANNEL FORM
+   ========================================= */
+
+function showAddChannelForm() {
+
+    const videoList =
+        document.querySelector(
+            ".video-list"
+        );
+
+
+    if (!videoList) {
+        return;
+    }
+
+
+    if (
+        document.querySelector(
+            ".channel-form"
+        )
+    ) {
+
+        return;
+    }
+
+
+    const existingApiKey =
+        getApiKey();
+
+
+    const apiKeyHtml =
+        existingApiKey
+            ? `
+
+                <p class="api-key-saved">
+                    ✓ API key already saved
+                </p>
+
+            `
+            : `
+
+                <label>
+
+                    YouTube API key
+
+                    <input
+                        type="password"
+                        id="youtube-api-key-input"
+                        placeholder="Paste your API key here"
+                        autocomplete="off"
+                    >
+
+                </label>
+
+            `;
+
+
+    const form =
+        document.createElement(
+            "div"
+        );
+
+
+    form.className =
+        "channel-form";
+
+
+    form.innerHTML = `
+
+        <h3>
+            Add YouTube Channel
+        </h3>
+
+
+        <label>
+
+            YouTube channel URL
+
+            <input
+                type="url"
+                id="channel-url-input"
+                placeholder="https://youtube.com/@channel"
+                autocomplete="off"
+            >
+
+        </label>
+
+
+        ${apiKeyHtml}
+
+
+        <div
+            class="form-actions"
+        >
+
+            <button
+                class="form-button form-save-button"
+                id="save-channel-button"
+                type="button"
+            >
+                Find channel
+            </button>
+
+
+            <button
+                class="form-button form-cancel-button"
+                id="cancel-channel-button"
+                type="button"
+            >
+                Cancel
+            </button>
+
+        </div>
+
+    `;
+
+
+    videoList.prepend(
+        form
+    );
+
+
+    const saveButton =
+        document.getElementById(
+            "save-channel-button"
+        );
+
+
+    const cancelButton =
+        document.getElementById(
+            "cancel-channel-button"
+        );
+
+
+    if (saveButton) {
+
+        saveButton.addEventListener(
+            "click",
+            connectYouTubeChannel
+        );
+    }
+
+
+    if (cancelButton) {
+
+        cancelButton.addEventListener(
+            "click",
+            () =>
+                updateContent()
+        );
+    }
 }
 
 
@@ -2300,10 +3025,11 @@ async function connectYouTubeChannel() {
                 formatDateTime(
                     new Date()
                 )
+
         };
 
 
-        const existingChannelIndex =
+        const existingIndex =
             channels.findIndex(
                 item =>
                     item.id ===
@@ -2312,16 +3038,15 @@ async function connectYouTubeChannel() {
 
 
         if (
-            existingChannelIndex >=
-            0
+            existingIndex >= 0
         ) {
 
             channels[
-                existingChannelIndex
+                existingIndex
             ] = {
 
                 ...channels[
-                    existingChannelIndex
+                    existingIndex
                 ],
 
                 ...newChannel
@@ -2351,6 +3076,8 @@ async function connectYouTubeChannel() {
 
         saveVideos();
 
+        saveLastRefreshTime();
+
 
         currentPage =
             "new";
@@ -2364,7 +3091,11 @@ async function connectYouTubeChannel() {
 
 
         alert(
-            `Connected to "${channelName}".\n\n${latestVideos.length} recent videos loaded.`
+
+            `Connected to "${channelName}".\n\n` +
+
+            `${latestVideos.length} recent videos loaded.`
+
         );
 
 
@@ -2379,7 +3110,6 @@ async function connectYouTubeChannel() {
         showYouTubeError(
             error
         );
-
 
     } finally {
 
@@ -2396,279 +3126,94 @@ async function connectYouTubeChannel() {
 
 
 /* =========================================
-   REFRESH ALL CHANNELS
+   CHANNEL BUTTONS
    ========================================= */
 
-async function refreshAllChannels() {
+function setupChannelButtons() {
 
-    if (
-        channels.length === 0
-    ) {
+    document
+        .querySelectorAll(
+            ".channel-card"
+        )
+        .forEach(
+            card => {
 
-        alert(
-            "There are no channels to refresh."
-        );
-
-        return;
-    }
-
-
-    const button =
-        document.getElementById(
-            "refresh-all-channels-button"
-        );
-
-
-    if (button) {
-
-        button.disabled =
-            true;
-
-        button.textContent =
-            "Refreshing...";
-    }
-
-
-    let totalVideos =
-        0;
-
-    let successfulChannels =
-        0;
-
-    let failedChannels =
-        0;
-
-
-    try {
-
-        for (
-            const savedChannel
-            of channels
-        ) {
-
-            try {
-
-                const parsedUrl =
-                    parseYouTubeChannelUrl(
-                        savedChannel.originalUrl ||
-                        savedChannel.url
+                const channelId =
+                    card.getAttribute(
+                        "data-channel-id"
                     );
 
 
-                let channel;
+                const deleteButton =
+                    card.querySelector(
+                        ".channel-delete-button"
+                    );
 
 
                 if (
-                    parsedUrl.valid
+                    !deleteButton
                 ) {
 
-                    channel =
-                        await findYouTubeChannel(
-                            parsedUrl
-                        );
-
-                } else {
-
-                    /*
-                       We already know the real
-                       channel ID, so use it directly.
-                    */
-
-                    channel =
-                        await youtubeApiRequest(
-                            "channels",
-                            {
-
-                                part:
-                                    "snippet,contentDetails",
-
-                                id:
-                                    savedChannel.id
-
-                            }
-                        );
-
-
-                    if (
-                        !channel.items ||
-                        channel.items.length === 0
-                    ) {
-
-                        throw new Error(
-                            "CHANNEL_NOT_FOUND"
-                        );
-                    }
-
-
-                    channel =
-                        channel.items[0];
+                    return;
                 }
 
 
-                const latestVideos =
-                    await loadChannelVideos(
-                        channel
-                    );
-
-
-                latestVideos.forEach(
-                    video =>
-                        mergeVideo(
-                            video
+                deleteButton.addEventListener(
+                    "click",
+                    () =>
+                        deleteChannel(
+                            channelId
                         )
                 );
 
-
-                totalVideos +=
-                    latestVideos.length;
-
-
-                successfulChannels++;
-
-
-                const channelIndex =
-                    channels.findIndex(
-                        item =>
-                            item.id ===
-                            savedChannel.id
-                    );
-
-
-                if (
-                    channelIndex >= 0
-                ) {
-
-                    channels[
-                        channelIndex
-                    ].name =
-                        channel
-                            ?.snippet
-                            ?.title ||
-                        channels[
-                            channelIndex
-                        ].name;
-
-
-                    channels[
-                        channelIndex
-                    ].thumbnail =
-                        channel
-                            ?.snippet
-                            ?.thumbnails
-                            ?.medium
-                            ?.url ||
-
-                        channel
-                            ?.snippet
-                            ?.thumbnails
-                            ?.default
-                            ?.url ||
-
-                        channels[
-                            channelIndex
-                        ].thumbnail;
-
-
-                    channels[
-                        channelIndex
-                    ].verified =
-                        true;
-
-
-                    channels[
-                        channelIndex
-                    ].lastUpdated =
-                        formatDateTime(
-                            new Date()
-                        );
-                }
-
-
-            } catch (error) {
-
-                console.log(
-                    `Could not refresh ${savedChannel.name}:`,
-                    error
-                );
-
-
-                failedChannels++;
             }
-
-        }
-
-
-        sortVideos();
-
-        saveVideos();
-
-        saveChannels();
-
-
-        updateContent();
-
-
-        alert(
-
-            `Refresh complete.\n\n` +
-
-            `Channels updated: ${successfulChannels}\n` +
-
-            `Channels with errors: ${failedChannels}\n` +
-
-            `Videos received: ${totalVideos}`
-
         );
-
-
-    } finally {
-
-        if (button) {
-
-            button.disabled =
-                false;
-
-            button.textContent =
-                "↻ Refresh All Channels";
-        }
-    }
 }
 
 
 /* =========================================
-   FORMAT DATE AND TIME
+   DELETE CHANNEL
    ========================================= */
 
-function formatDateTime(
-    date
+function deleteChannel(
+    channelId
 ) {
 
-    if (!date) {
-        return "";
+    const channel =
+        channels.find(
+            item =>
+                item.id ===
+                channelId
+        );
+
+
+    if (!channel) {
+        return;
     }
 
 
-    return date.toLocaleString(
-        "en-GB",
-        {
+    const confirmed =
+        confirm(
+            `Delete "${channel.name}" from your channels?`
+        );
 
-            day:
-                "2-digit",
 
-            month:
-                "short",
+    if (!confirmed) {
+        return;
+    }
 
-            year:
-                "numeric",
 
-            hour:
-                "2-digit",
+    channels =
+        channels.filter(
+            item =>
+                item.id !==
+                channelId
+        );
 
-            minute:
-                "2-digit"
 
-        }
-    );
+    saveChannels();
+
+    updateContent();
 }
 
 
@@ -2755,98 +3300,10 @@ function showYouTubeError(
 
 
 /* =========================================
-   DELETE CHANNEL
-   ========================================= */
-
-function setupChannelButtons() {
-
-    document
-        .querySelectorAll(
-            ".channel-card"
-        )
-        .forEach(
-            card => {
-
-                const channelId =
-                    card.getAttribute(
-                        "data-channel-id"
-                    );
-
-
-                const deleteButton =
-                    card.querySelector(
-                        ".channel-delete-button"
-                    );
-
-
-                if (
-                    !deleteButton
-                ) {
-
-                    return;
-                }
-
-
-                deleteButton.addEventListener(
-                    "click",
-                    () =>
-                        deleteChannel(
-                            channelId
-                        )
-                );
-
-            }
-        );
-}
-
-
-function deleteChannel(
-    channelId
-) {
-
-    const channel =
-        channels.find(
-            item =>
-                item.id ===
-                channelId
-        );
-
-
-    if (!channel) {
-        return;
-    }
-
-
-    const confirmed =
-        confirm(
-            `Delete "${channel.name}" from your channels?`
-        );
-
-
-    if (!confirmed) {
-        return;
-    }
-
-
-    channels =
-        channels.filter(
-            item =>
-                item.id !==
-                channelId
-        );
-
-
-    saveChannels();
-
-    updateContent();
-}
-
-
-/* =========================================
    START APPLICATION
    ========================================= */
 
-function startApp() {
+async function startApp() {
 
     videos =
         loadVideos();
@@ -2863,6 +3320,10 @@ function startApp() {
     updateNavigation();
 
     updateContent();
+
+    startAutomaticRefresh();
+
+    await maybeAutoRefresh();
 }
 
 
