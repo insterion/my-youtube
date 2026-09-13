@@ -1,14 +1,14 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Version 0.9
+   Version 1.0
 
    Added:
-   - Multiple channels
-   - Refresh all channels
-   - Automatic refresh
-   - Refresh button
-   - Preserves watched/saved/downloaded
+   - Settings screen
+   - API key management
+   - Change API key
+   - Remove API key
+   - Existing channel/video features
    ========================================= */
 
 
@@ -73,7 +73,7 @@ function saveApiKey(apiKey) {
 
     localStorage.setItem(
         API_KEY_STORAGE_KEY,
-        apiKey
+        apiKey.trim()
     );
 }
 
@@ -189,34 +189,48 @@ function saveChannels() {
 
 
 /* =========================================
+   PAGE STORAGE
+   ========================================= */
+
+function saveCurrentPage() {
+
+    localStorage.setItem(
+        PAGE_STORAGE_KEY,
+        currentPage
+    );
+}
+
+
+/* =========================================
    REFRESH STORAGE
    ========================================= */
 
 function getLastRefreshTime() {
 
-    const value =
+    const saved =
         localStorage.getItem(
             LAST_REFRESH_KEY
         );
 
 
-    if (!value) {
+    if (!saved) {
         return 0;
     }
 
 
-    const time =
-        Number(value);
+    const value =
+        Number(saved);
 
 
     if (
-        Number.isNaN(time)
+        Number.isNaN(value)
     ) {
+
         return 0;
     }
 
 
-    return time;
+    return value;
 }
 
 
@@ -227,19 +241,6 @@ function saveLastRefreshTime() {
         String(
             Date.now()
         )
-    );
-}
-
-
-/* =========================================
-   CURRENT PAGE
-   ========================================= */
-
-function saveCurrentPage() {
-
-    localStorage.setItem(
-        PAGE_STORAGE_KEY,
-        currentPage
     );
 }
 
@@ -335,6 +336,505 @@ function updateNavigation() {
 
 
 /* =========================================
+   SETTINGS BUTTON
+   ========================================= */
+
+function setupSettingsButton() {
+
+    const button =
+        document.querySelector(
+            ".settings-button"
+        );
+
+
+    if (!button) {
+        return;
+    }
+
+
+    button.addEventListener(
+        "click",
+        openSettings
+    );
+}
+
+
+/* =========================================
+   OPEN SETTINGS
+   ========================================= */
+
+function openSettings() {
+
+    closeSettings();
+
+
+    const modal =
+        document.createElement(
+            "div"
+        );
+
+
+    modal.className =
+        "settings-overlay";
+
+
+    modal.id =
+        "settings-overlay";
+
+
+    const apiKeySaved =
+        Boolean(
+            getApiKey()
+        );
+
+
+    modal.innerHTML = `
+
+        <div
+            class="settings-modal"
+            role="dialog"
+            aria-modal="true"
+        >
+
+            <div
+                class="settings-header"
+            >
+
+                <div>
+
+                    <h2>
+                        Settings
+                    </h2>
+
+                    <p>
+                        My YouTube
+                    </p>
+
+                </div>
+
+
+                <button
+                    class="settings-close-button"
+                    id="close-settings-button"
+                    type="button"
+                    aria-label="Close settings"
+                >
+                    ×
+                </button>
+
+            </div>
+
+
+            <div
+                class="settings-section"
+            >
+
+                <h3>
+                    YouTube API
+                </h3>
+
+
+                <div
+                    class="settings-status ${
+                        apiKeySaved
+                            ? "settings-status-ok"
+                            : "settings-status-warning"
+                    }"
+                >
+
+                    ${
+                        apiKeySaved
+                            ? "✓ API key saved on this device"
+                            : "⚠ No API key saved"
+                    }
+
+                </div>
+
+
+                <button
+                    class="settings-action-button"
+                    id="change-api-key-button"
+                    type="button"
+                >
+                    Change API key
+                </button>
+
+
+                ${
+                    apiKeySaved
+                        ? `
+
+                            <button
+                                class="settings-danger-button"
+                                id="remove-api-key-button"
+                                type="button"
+                            >
+                                Remove API key
+                            </button>
+
+                          `
+                        : ""
+                }
+
+            </div>
+
+
+            <div
+                class="settings-section"
+            >
+
+                <h3>
+                    Channels
+                </h3>
+
+
+                <p
+                    class="settings-description"
+                >
+                    Following ${channels.length}
+                    channel${
+                        channels.length === 1
+                            ? ""
+                            : "s"
+                    }.
+                </p>
+
+
+                <p
+                    class="settings-description"
+                >
+                    Automatic refresh:
+                    every 30 minutes while the
+                    app is open.
+                </p>
+
+            </div>
+
+
+            <div
+                class="settings-footer"
+            >
+
+                <button
+                    class="form-button form-cancel-button"
+                    id="close-settings-footer-button"
+                    type="button"
+                >
+                    Close
+                </button>
+
+            </div>
+
+        </div>
+
+    `;
+
+
+    document.body.appendChild(
+        modal
+    );
+
+
+    document
+        .getElementById(
+            "close-settings-button"
+        )
+        .addEventListener(
+            "click",
+            closeSettings
+        );
+
+
+    document
+        .getElementById(
+            "close-settings-footer-button"
+        )
+        .addEventListener(
+            "click",
+            closeSettings
+        );
+
+
+    document
+        .getElementById(
+            "change-api-key-button"
+        )
+        .addEventListener(
+            "click",
+            showChangeApiKeyForm
+        );
+
+
+    const removeButton =
+        document.getElementById(
+            "remove-api-key-button"
+        );
+
+
+    if (removeButton) {
+
+        removeButton.addEventListener(
+            "click",
+            removeStoredApiKey
+        );
+    }
+
+
+    modal.addEventListener(
+        "click",
+        event => {
+
+            if (
+                event.target ===
+                modal
+            ) {
+
+                closeSettings();
+            }
+
+        }
+    );
+}
+
+
+/* =========================================
+   CLOSE SETTINGS
+   ========================================= */
+
+function closeSettings() {
+
+    const modal =
+        document.getElementById(
+            "settings-overlay"
+        );
+
+
+    if (modal) {
+
+        modal.remove();
+    }
+}
+
+
+/* =========================================
+   CHANGE API KEY FORM
+   ========================================= */
+
+function showChangeApiKeyForm() {
+
+    const modal =
+        document.getElementById(
+            "settings-overlay"
+        );
+
+
+    if (!modal) {
+        return;
+    }
+
+
+    const currentKey =
+        getApiKey();
+
+
+    modal.querySelector(
+        ".settings-modal"
+    ).innerHTML = `
+
+        <div
+            class="settings-header"
+        >
+
+            <div>
+
+                <h2>
+                    Change API key
+                </h2>
+
+                <p>
+                    Enter your new YouTube API key.
+                </p>
+
+            </div>
+
+
+            <button
+                class="settings-close-button"
+                id="close-settings-button"
+                type="button"
+                aria-label="Close settings"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <div
+            class="settings-section"
+        >
+
+            <label
+                class="settings-input-label"
+            >
+
+                YouTube API key
+
+                <input
+                    type="password"
+                    id="new-api-key-input"
+                    value="${escapeHtml(
+                        currentKey
+                    )}"
+                    placeholder="Paste API key"
+                    autocomplete="off"
+                >
+
+            </label>
+
+
+            <p
+                class="settings-description"
+            >
+                The key is stored locally in
+                this browser on this device.
+            </p>
+
+        </div>
+
+
+        <div
+            class="settings-footer"
+        >
+
+            <button
+                class="form-button form-save-button"
+                id="save-new-api-key-button"
+                type="button"
+            >
+                Save API key
+            </button>
+
+
+            <button
+                class="form-button form-cancel-button"
+                id="cancel-api-key-button"
+                type="button"
+            >
+                Cancel
+            </button>
+
+        </div>
+
+    `;
+
+
+    document
+        .getElementById(
+            "close-settings-button"
+        )
+        .addEventListener(
+            "click",
+            closeSettings
+        );
+
+
+    document
+        .getElementById(
+            "cancel-api-key-button"
+        )
+        .addEventListener(
+            "click",
+            openSettings
+        );
+
+
+    document
+        .getElementById(
+            "save-new-api-key-button"
+        )
+        .addEventListener(
+            "click",
+            saveNewApiKey
+        );
+}
+
+
+/* =========================================
+   SAVE NEW API KEY
+   ========================================= */
+
+function saveNewApiKey() {
+
+    const input =
+        document.getElementById(
+            "new-api-key-input"
+        );
+
+
+    if (!input) {
+        return;
+    }
+
+
+    const newKey =
+        input.value.trim();
+
+
+    if (!newKey) {
+
+        alert(
+            "Please enter an API key."
+        );
+
+        return;
+    }
+
+
+    saveApiKey(
+        newKey
+    );
+
+
+    alert(
+        "API key saved."
+    );
+
+
+    openSettings();
+}
+
+
+/* =========================================
+   REMOVE API KEY
+   ========================================= */
+
+function removeStoredApiKey() {
+
+    const confirmed =
+        confirm(
+            "Remove the saved YouTube API key from this device?"
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    removeApiKey();
+
+
+    alert(
+        "API key removed."
+    );
+
+
+    openSettings();
+}
+
+
+/* =========================================
    VIDEO FILTERING
    ========================================= */
 
@@ -392,7 +892,7 @@ function sortVideos() {
             second
         ) => {
 
-            const firstDate =
+            const firstTime =
                 new Date(
                     first.publishedAt ||
                     first.date ||
@@ -400,7 +900,7 @@ function sortVideos() {
                 ).getTime();
 
 
-            const secondDate =
+            const secondTime =
                 new Date(
                     second.publishedAt ||
                     second.date ||
@@ -409,8 +909,8 @@ function sortVideos() {
 
 
             return (
-                secondDate -
-                firstDate
+                secondTime -
+                firstTime
             );
         }
     );
@@ -439,6 +939,7 @@ function updateContent() {
         !videoList ||
         !sectionTitle
     ) {
+
         return;
     }
 
@@ -553,7 +1054,7 @@ function addRefreshButton() {
     }
 
 
-    const existingButton =
+    const existing =
         document.getElementById(
             "refresh-page-button"
         );
@@ -564,15 +1065,15 @@ function addRefreshButton() {
         "channels"
     ) {
 
-        if (existingButton) {
-            existingButton.remove();
+        if (existing) {
+            existing.remove();
         }
 
         return;
     }
 
 
-    if (existingButton) {
+    if (existing) {
         return;
     }
 
@@ -618,7 +1119,9 @@ function addRefreshButton() {
    VIDEO CARD
    ========================================= */
 
-function createVideoCard(video) {
+function createVideoCard(
+    video
+) {
 
     const watchedText =
         video.watched
@@ -638,7 +1141,7 @@ function createVideoCard(video) {
             : "↓ Download";
 
 
-    const thumbnailHtml =
+    const thumbnail =
         video.thumbnail
             ? `
 
@@ -674,7 +1177,7 @@ function createVideoCard(video) {
 
             <div class="thumbnail">
 
-                ${thumbnailHtml}
+                ${thumbnail}
 
             </div>
 
@@ -912,7 +1415,7 @@ function setupVideoButtons() {
 
 
 /* =========================================
-   WATCH
+   WATCH VIDEO
    ========================================= */
 
 function watchVideo(
@@ -1035,10 +1538,9 @@ function toggleDownloaded(
 
 
     /*
-       This is still only a status.
+       Status only for now.
 
-       Actual downloading will be
-       implemented separately.
+       No actual file download yet.
     */
 
     video.downloaded =
@@ -1052,7 +1554,7 @@ function toggleDownloaded(
 
 
 /* =========================================
-   PARSE CHANNEL URL
+   PARSE YOUTUBE CHANNEL URL
    ========================================= */
 
 function parseYouTubeChannelUrl(
@@ -1356,14 +1858,14 @@ async function loadChannelVideos(
     channel
 ) {
 
-    const uploadsPlaylistId =
+    const playlistId =
         channel
             ?.contentDetails
             ?.relatedPlaylists
             ?.uploads;
 
 
-    if (!uploadsPlaylistId) {
+    if (!playlistId) {
 
         throw new Error(
             "UPLOADS_PLAYLIST_NOT_FOUND"
@@ -1380,7 +1882,7 @@ async function loadChannelVideos(
                     "snippet,contentDetails",
 
                 playlistId:
-                    uploadsPlaylistId,
+                    playlistId,
 
                 maxResults:
                     "10"
@@ -1567,7 +2069,7 @@ async function loadChannelVideos(
 
 
 /* =========================================
-   LOAD CHANNEL VIDEOS USING SAVED PLAYLIST
+   LOAD SAVED CHANNEL
    ========================================= */
 
 async function loadVideosFromSavedChannel(
@@ -1909,14 +2411,12 @@ function formatDuration(
 
         return (
             seconds > 0
-
                 ? `${minutes}m ${String(
                     seconds
                 ).padStart(
                     2,
                     "0"
                 )}s`
-
                 : `${minutes}m`
         );
     }
@@ -2026,7 +2526,9 @@ async function refreshAllChannels(
     }
 
 
-    if (!getApiKey()) {
+    if (
+        !getApiKey()
+    ) {
 
         if (!silent) {
 
@@ -2093,7 +2595,6 @@ async function refreshAllChannels(
                         new Date()
                     );
 
-
             } catch (error) {
 
                 console.log(
@@ -2135,7 +2636,6 @@ async function refreshAllChannels(
             );
         }
 
-
     } finally {
 
         refreshInProgress =
@@ -2149,7 +2649,7 @@ async function refreshAllChannels(
 
 
 /* =========================================
-   REFRESH BUTTON STATE
+   UPDATE REFRESH BUTTONS
    ========================================= */
 
 function updateRefreshButtons(
@@ -2194,7 +2694,7 @@ function updateRefreshButtons(
 
 
 /* =========================================
-   AUTO REFRESH
+   AUTOMATIC REFRESH
    ========================================= */
 
 async function maybeAutoRefresh() {
@@ -2202,6 +2702,7 @@ async function maybeAutoRefresh() {
     if (
         channels.length === 0
     ) {
+
         return;
     }
 
@@ -2209,6 +2710,7 @@ async function maybeAutoRefresh() {
     if (
         !getApiKey()
     ) {
+
         return;
     }
 
@@ -2238,7 +2740,7 @@ async function maybeAutoRefresh() {
 
 
 /* =========================================
-   PERIODIC AUTO REFRESH
+   PERIODIC REFRESH
    ========================================= */
 
 function startAutomaticRefresh() {
@@ -2253,134 +2755,6 @@ function startAutomaticRefresh() {
         },
         AUTO_REFRESH_INTERVAL
     );
-}
-
-
-/* =========================================
-   LAST REFRESH DISPLAY
-   ========================================= */
-
-function getLastRefreshText() {
-
-    const lastRefresh =
-        getLastRefreshTime();
-
-
-    if (!lastRefresh) {
-        return "";
-    }
-
-
-    const date =
-        new Date(
-            lastRefresh
-        );
-
-
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
-
-        return "";
-    }
-
-
-    return (
-        "Last refresh: " +
-        formatDateTime(
-            date
-        )
-    );
-}
-
-
-/* =========================================
-   FORMAT DATE + TIME
-   ========================================= */
-
-function formatDateTime(
-    date
-) {
-
-    if (!date) {
-        return "";
-    }
-
-
-    return date.toLocaleString(
-        "en-GB",
-        {
-
-            day:
-                "2-digit",
-
-            month:
-                "short",
-
-            year:
-                "numeric",
-
-            hour:
-                "2-digit",
-
-            minute:
-                "2-digit"
-
-        }
-    );
-}
-
-
-/* =========================================
-   NEW VIDEO COUNT
-   ========================================= */
-
-function updateNewVideoCount() {
-
-    const countElement =
-        document.querySelector(
-            ".video-count"
-        );
-
-
-    if (!countElement) {
-        return;
-    }
-
-
-    if (
-        currentPage ===
-        "channels"
-    ) {
-
-        countElement.textContent =
-            `${channels.length} channels`;
-
-        return;
-    }
-
-
-    const newCount =
-        videos.filter(
-            video =>
-                !video.watched
-        ).length;
-
-
-    if (
-        newCount === 1
-    ) {
-
-        countElement.textContent =
-            "1 new";
-
-    } else {
-
-        countElement.textContent =
-            `${newCount} new`;
-    }
 }
 
 
@@ -2490,9 +2864,15 @@ function renderChannelsPage() {
 
 
         <div class="channel-last-refresh">
-            ${escapeHtml(
+
+            ${
                 getLastRefreshText()
-            )}
+                    ? escapeHtml(
+                        getLastRefreshText()
+                    )
+                    : "Not refreshed yet"
+            }
+
         </div>
 
 
@@ -2531,13 +2911,7 @@ function createChannelCard(
     channel
 ) {
 
-    const statusText =
-        channel.verified
-            ? "✓ Connected to YouTube"
-            : "Local channel";
-
-
-    const thumbnailHtml =
+    const thumbnail =
         channel.thumbnail
             ? `
 
@@ -2553,6 +2927,12 @@ function createChannelCard(
             : "";
 
 
+    const status =
+        channel.verified
+            ? "✓ Connected to YouTube"
+            : "Not connected";
+
+
     return `
 
         <article
@@ -2566,7 +2946,7 @@ function createChannelCard(
                 class="channel-card-header"
             >
 
-                ${thumbnailHtml}
+                ${thumbnail}
 
 
                 <div>
@@ -2574,22 +2954,18 @@ function createChannelCard(
                     <h3
                         class="channel-card-name"
                     >
-
                         ${escapeHtml(
                             channel.name
                         )}
-
                     </h3>
 
 
                     <p
                         class="channel-card-url"
                     >
-
                         ${escapeHtml(
-                            statusText
+                            status
                         )}
-
                     </p>
 
 
@@ -2600,12 +2976,10 @@ function createChannelCard(
                                 <p
                                     class="channel-card-url"
                                 >
-
                                     Checked:
                                     ${escapeHtml(
                                         channel.lastUpdated
                                     )}
-
                                 </p>
 
                               `
@@ -2671,7 +3045,7 @@ function setupAddChannelButton() {
 
 
 /* =========================================
-   REFRESH ALL CHANNELS BUTTON
+   REFRESH ALL BUTTON
    ========================================= */
 
 function setupRefreshAllChannelsButton() {
@@ -2853,7 +3227,7 @@ function showAddChannelForm() {
 
 
 /* =========================================
-   CONNECT CHANNEL
+   CONNECT YOUTUBE CHANNEL
    ========================================= */
 
 async function connectYouTubeChannel() {
@@ -2910,11 +3284,11 @@ async function connectYouTubeChannel() {
         apiKeyInput
     ) {
 
-        const enteredApiKey =
+        const enteredKey =
             apiKeyInput.value.trim();
 
 
-        if (!enteredApiKey) {
+        if (!enteredKey) {
 
             alert(
                 "Please enter your YouTube API key."
@@ -2925,7 +3299,7 @@ async function connectYouTubeChannel() {
 
 
         saveApiKey(
-            enteredApiKey
+            enteredKey
         );
     }
 
@@ -3038,7 +3412,8 @@ async function connectYouTubeChannel() {
 
 
         if (
-            existingIndex >= 0
+            existingIndex >=
+            0
         ) {
 
             channels[
@@ -3098,7 +3473,6 @@ async function connectYouTubeChannel() {
 
         );
 
-
     } catch (error) {
 
         console.log(
@@ -3122,98 +3496,6 @@ async function connectYouTubeChannel() {
                 "Find channel";
         }
     }
-}
-
-
-/* =========================================
-   CHANNEL BUTTONS
-   ========================================= */
-
-function setupChannelButtons() {
-
-    document
-        .querySelectorAll(
-            ".channel-card"
-        )
-        .forEach(
-            card => {
-
-                const channelId =
-                    card.getAttribute(
-                        "data-channel-id"
-                    );
-
-
-                const deleteButton =
-                    card.querySelector(
-                        ".channel-delete-button"
-                    );
-
-
-                if (
-                    !deleteButton
-                ) {
-
-                    return;
-                }
-
-
-                deleteButton.addEventListener(
-                    "click",
-                    () =>
-                        deleteChannel(
-                            channelId
-                        )
-                );
-
-            }
-        );
-}
-
-
-/* =========================================
-   DELETE CHANNEL
-   ========================================= */
-
-function deleteChannel(
-    channelId
-) {
-
-    const channel =
-        channels.find(
-            item =>
-                item.id ===
-                channelId
-        );
-
-
-    if (!channel) {
-        return;
-    }
-
-
-    const confirmed =
-        confirm(
-            `Delete "${channel.name}" from your channels?`
-        );
-
-
-    if (!confirmed) {
-        return;
-    }
-
-
-    channels =
-        channels.filter(
-            item =>
-                item.id !==
-                channelId
-        );
-
-
-    saveChannels();
-
-    updateContent();
 }
 
 
@@ -3273,7 +3555,7 @@ function showYouTubeError(
 
 
         alert(
-            "The YouTube API key is invalid. It has been removed."
+            "The YouTube API key was invalid and has been removed."
         );
 
         return;
@@ -3316,6 +3598,8 @@ async function startApp() {
     sortVideos();
 
     setupNavigation();
+
+    setupSettingsButton();
 
     updateNavigation();
 
