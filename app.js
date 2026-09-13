@@ -1,48 +1,8 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Version 0.6
-
-   This version adds:
-   - YouTube API connection
-   - API key storage on the phone
-   - Real channel validation
-   - Real channel information
-   - Latest uploaded videos
+   Version 0.7
    ========================================= */
-
-
-/* =========================================
-   EXAMPLE VIDEOS
-   ========================================= */
-
-const videos = [
-
-    {
-        id: "example-video-1",
-        title: "Example New Video",
-        channel: "Example Channel",
-        date: "12 Sep 2026",
-        duration: "12 min",
-        watched: false,
-        saved: false,
-        downloaded: false,
-        youtubeUrl: ""
-    },
-
-    {
-        id: "example-video-2",
-        title: "Another Example Video",
-        channel: "Another Channel",
-        date: "11 Sep 2026",
-        duration: "8 min",
-        watched: false,
-        saved: false,
-        downloaded: false,
-        youtubeUrl: ""
-    }
-
-];
 
 
 /* =========================================
@@ -65,6 +25,8 @@ const API_KEY_STORAGE_KEY =
 /* =========================================
    DATA
    ========================================= */
+
+let videos = [];
 
 let channels = [];
 
@@ -116,7 +78,8 @@ function loadVideos() {
 
 
     if (!savedVideos) {
-        return videos;
+
+        return [];
     }
 
 
@@ -127,7 +90,8 @@ function loadVideos() {
 
 
         if (!Array.isArray(parsedVideos)) {
-            return videos;
+
+            return [];
         }
 
 
@@ -136,10 +100,11 @@ function loadVideos() {
     } catch (error) {
 
         console.log(
-            "Could not read saved videos."
+            "Could not read saved videos.",
+            error
         );
 
-        return videos;
+        return [];
     }
 }
 
@@ -166,6 +131,7 @@ function loadChannels() {
 
 
     if (!savedChannels) {
+
         return [];
     }
 
@@ -177,6 +143,7 @@ function loadChannels() {
 
 
         if (!Array.isArray(parsedChannels)) {
+
             return [];
         }
 
@@ -186,7 +153,8 @@ function loadChannels() {
     } catch (error) {
 
         console.log(
-            "Could not read saved channels."
+            "Could not read saved channels.",
+            error
         );
 
         return [];
@@ -204,7 +172,7 @@ function saveChannels() {
 
 
 /* =========================================
-   PAGE STORAGE
+   CURRENT PAGE
    ========================================= */
 
 function saveCurrentPage() {
@@ -283,8 +251,11 @@ function updateNavigation() {
     const pageIndexes = {
 
         new: 0,
+
         saved: 1,
+
         watched: 2,
+
         channels: 3
 
     };
@@ -294,10 +265,14 @@ function updateNavigation() {
         pageIndexes[currentPage];
 
 
-    if (navButtons[activeIndex]) {
+    if (
+        navButtons[activeIndex]
+    ) {
 
         navButtons[activeIndex]
-            .classList.add("active");
+            .classList.add(
+                "active"
+            );
     }
 }
 
@@ -340,7 +315,7 @@ function getVisibleVideos() {
 
 
 /* =========================================
-   UPDATE CONTENT
+   UPDATE MAIN CONTENT
    ========================================= */
 
 function updateContent() {
@@ -357,12 +332,19 @@ function updateContent() {
         );
 
 
-    if (!videoList || !sectionTitle) {
+    if (
+        !videoList ||
+        !sectionTitle
+    ) {
+
         return;
     }
 
 
-    if (currentPage === "channels") {
+    if (
+        currentPage ===
+        "channels"
+    ) {
 
         renderChannelsPage();
 
@@ -370,17 +352,26 @@ function updateContent() {
     }
 
 
-    if (currentPage === "new") {
+    if (
+        currentPage ===
+        "new"
+    ) {
 
         sectionTitle.textContent =
             "New Videos";
 
-    } else if (currentPage === "saved") {
+    } else if (
+        currentPage ===
+        "saved"
+    ) {
 
         sectionTitle.textContent =
             "Saved Videos";
 
-    } else if (currentPage === "watched") {
+    } else if (
+        currentPage ===
+        "watched"
+    ) {
 
         sectionTitle.textContent =
             "Watched Videos";
@@ -391,7 +382,9 @@ function updateContent() {
         getVisibleVideos();
 
 
-    if (visibleVideos.length === 0) {
+    if (
+        visibleVideos.length === 0
+    ) {
 
         videoList.innerHTML = `
 
@@ -462,6 +455,31 @@ function createVideoCard(video) {
             : "↓ Download";
 
 
+    const thumbnailHtml =
+        video.thumbnail
+            ? `
+
+                <img
+                    class="thumbnail-image"
+                    src="${escapeHtml(
+                        video.thumbnail
+                    )}"
+                    alt=""
+                    loading="lazy"
+                >
+
+            `
+            : `
+
+                <div
+                    class="thumbnail-placeholder"
+                >
+                    VIDEO
+                </div>
+
+            `;
+
+
     return `
 
         <article
@@ -473,11 +491,7 @@ function createVideoCard(video) {
 
             <div class="thumbnail">
 
-                <div class="thumbnail-placeholder">
-
-                    VIDEO
-
-                </div>
+                ${thumbnailHtml}
 
             </div>
 
@@ -504,11 +518,13 @@ function createVideoCard(video) {
                         video.date
                     )}
 
-                    •
-                    
-                    ${escapeHtml(
+                    ${
                         video.duration
-                    )}
+                            ? `• ${escapeHtml(
+                                video.duration
+                              )}`
+                            : ""
+                    }
 
                 </p>
 
@@ -524,7 +540,11 @@ function createVideoCard(video) {
 
 
                     <button
-                        class="action-button watched-button"
+                        class="action-button watched-button ${
+                            video.watched
+                                ? "is-active"
+                                : ""
+                        }"
                         type="button"
                     >
                         ${watchedText}
@@ -538,7 +558,11 @@ function createVideoCard(video) {
                 >
 
                     <button
-                        class="action-button download-button"
+                        class="action-button download-button ${
+                            video.downloaded
+                                ? "is-active"
+                                : ""
+                        }"
                         type="button"
                     >
                         ${downloadedText}
@@ -546,7 +570,11 @@ function createVideoCard(video) {
 
 
                     <button
-                        class="action-button save-button"
+                        class="action-button save-button ${
+                            video.saved
+                                ? "is-active"
+                                : ""
+                        }"
                         type="button"
                     >
                         ${savedText}
@@ -607,86 +635,96 @@ function setupVideoButtons() {
         .querySelectorAll(
             ".video-card"
         )
-        .forEach(card => {
+        .forEach(
+            card => {
 
-            const videoId =
-                card.getAttribute(
-                    "data-video-id"
-                );
-
-
-            const watchButton =
-                card.querySelector(
-                    ".watch-button"
-                );
+                const videoId =
+                    card.getAttribute(
+                        "data-video-id"
+                    );
 
 
-            const watchedButton =
-                card.querySelector(
-                    ".watched-button"
-                );
+                const watchButton =
+                    card.querySelector(
+                        ".watch-button"
+                    );
 
 
-            const saveButton =
-                card.querySelector(
-                    ".save-button"
-                );
+                const watchedButton =
+                    card.querySelector(
+                        ".watched-button"
+                    );
 
 
-            const downloadButton =
-                card.querySelector(
-                    ".download-button"
-                );
+                const saveButton =
+                    card.querySelector(
+                        ".save-button"
+                    );
 
 
-            if (watchButton) {
+                const downloadButton =
+                    card.querySelector(
+                        ".download-button"
+                    );
 
-                watchButton.addEventListener(
-                    "click",
-                    () =>
-                        watchVideo(
-                            videoId
-                        )
-                );
+
+                if (
+                    watchButton
+                ) {
+
+                    watchButton.addEventListener(
+                        "click",
+                        () =>
+                            watchVideo(
+                                videoId
+                            )
+                    );
+                }
+
+
+                if (
+                    watchedButton
+                ) {
+
+                    watchedButton.addEventListener(
+                        "click",
+                        () =>
+                            toggleWatched(
+                                videoId
+                            )
+                    );
+                }
+
+
+                if (
+                    saveButton
+                ) {
+
+                    saveButton.addEventListener(
+                        "click",
+                        () =>
+                            toggleSaved(
+                                videoId
+                            )
+                    );
+                }
+
+
+                if (
+                    downloadButton
+                ) {
+
+                    downloadButton.addEventListener(
+                        "click",
+                        () =>
+                            toggleDownloaded(
+                                videoId
+                            )
+                    );
+                }
+
             }
-
-
-            if (watchedButton) {
-
-                watchedButton.addEventListener(
-                    "click",
-                    () =>
-                        toggleWatched(
-                            videoId
-                        )
-                );
-            }
-
-
-            if (saveButton) {
-
-                saveButton.addEventListener(
-                    "click",
-                    () =>
-                        toggleSaved(
-                            videoId
-                        )
-                );
-            }
-
-
-            if (downloadButton) {
-
-                downloadButton.addEventListener(
-                    "click",
-                    () =>
-                        toggleDownloaded(
-                            videoId
-                        )
-                );
-            }
-
-        });
+        );
 }
 
 
@@ -699,7 +737,8 @@ function watchVideo(videoId) {
     const video =
         videos.find(
             item =>
-                item.id === videoId
+                item.id ===
+                videoId
         );
 
 
@@ -708,7 +747,9 @@ function watchVideo(videoId) {
     }
 
 
-    if (video.youtubeUrl) {
+    if (
+        video.youtubeUrl
+    ) {
 
         window.open(
             video.youtubeUrl,
@@ -720,21 +761,24 @@ function watchVideo(videoId) {
 
 
     alert(
-        "This example video does not have a YouTube link yet."
+        "No YouTube link is available for this video."
     );
 }
 
 
 /* =========================================
-   WATCHED
+   TOGGLE WATCHED
    ========================================= */
 
-function toggleWatched(videoId) {
+function toggleWatched(
+    videoId
+) {
 
     const video =
         videos.find(
             item =>
-                item.id === videoId
+                item.id ===
+                videoId
         );
 
 
@@ -754,15 +798,18 @@ function toggleWatched(videoId) {
 
 
 /* =========================================
-   SAVED
+   TOGGLE SAVED
    ========================================= */
 
-function toggleSaved(videoId) {
+function toggleSaved(
+    videoId
+) {
 
     const video =
         videos.find(
             item =>
-                item.id === videoId
+                item.id ===
+                videoId
         );
 
 
@@ -782,15 +829,18 @@ function toggleSaved(videoId) {
 
 
 /* =========================================
-   DOWNLOAD STATUS
+   TOGGLE DOWNLOADED STATUS
    ========================================= */
 
-function toggleDownloaded(videoId) {
+function toggleDownloaded(
+    videoId
+) {
 
     const video =
         videos.find(
             item =>
-                item.id === videoId
+                item.id ===
+                videoId
         );
 
 
@@ -800,9 +850,9 @@ function toggleDownloaded(videoId) {
 
 
     /*
-       Temporary status only.
+       This is still only a status.
 
-       No file is downloaded yet.
+       No actual file is downloaded yet.
     */
 
     video.downloaded =
@@ -832,7 +882,10 @@ function updateNewVideoCount() {
     }
 
 
-    if (currentPage === "channels") {
+    if (
+        currentPage ===
+        "channels"
+    ) {
 
         countElement.textContent =
             `${channels.length} channels`;
@@ -848,7 +901,9 @@ function updateNewVideoCount() {
         ).length;
 
 
-    if (newCount === 1) {
+    if (
+        newCount === 1
+    ) {
 
         countElement.textContent =
             "1 new";
@@ -862,7 +917,7 @@ function updateNewVideoCount() {
 
 
 /* =========================================
-   CHANNEL PAGE
+   CHANNELS PAGE
    ========================================= */
 
 function renderChannelsPage() {
@@ -879,11 +934,22 @@ function renderChannelsPage() {
         );
 
 
+    if (
+        !videoList ||
+        !sectionTitle
+    ) {
+
+        return;
+    }
+
+
     sectionTitle.textContent =
         "Channels";
 
 
-    if (channels.length === 0) {
+    if (
+        channels.length === 0
+    ) {
 
         videoList.innerHTML = `
 
@@ -961,12 +1027,30 @@ function renderChannelsPage() {
    CHANNEL CARD
    ========================================= */
 
-function createChannelCard(channel) {
+function createChannelCard(
+    channel
+) {
 
     const statusText =
         channel.verified
             ? "✓ Connected to YouTube"
             : "Local channel";
+
+
+    const thumbnailHtml =
+        channel.thumbnail
+            ? `
+
+                <img
+                    class="channel-thumbnail"
+                    src="${escapeHtml(
+                        channel.thumbnail
+                    )}"
+                    alt=""
+                >
+
+            `
+            : "";
 
 
     return `
@@ -978,11 +1062,18 @@ function createChannelCard(channel) {
             )}"
         >
 
-            <div class="channel-card-header">
+            <div
+                class="channel-card-header"
+            >
+
+                ${thumbnailHtml}
+
 
                 <div>
 
-                    <h3 class="channel-card-name">
+                    <h3
+                        class="channel-card-name"
+                    >
 
                         ${escapeHtml(
                             channel.name
@@ -991,16 +1082,9 @@ function createChannelCard(channel) {
                     </h3>
 
 
-                    <p class="channel-card-url">
-
-                        ${escapeHtml(
-                            channel.url
-                        )}
-
-                    </p>
-
-
-                    <p class="channel-card-url">
+                    <p
+                        class="channel-card-url"
+                    >
 
                         ${escapeHtml(
                             statusText
@@ -1033,7 +1117,7 @@ function createChannelCard(channel) {
 
 
 /* =========================================
-   ADD CHANNEL BUTTON
+   ADD CHANNEL
    ========================================= */
 
 function setupAddChannelButton() {
@@ -1090,7 +1174,15 @@ function showAddChannelForm() {
 
     const apiKeyHtml =
         existingApiKey
-            ? ""
+            ? `
+
+                <p
+                    class="api-key-saved"
+                >
+                    ✓ API key already saved
+                </p>
+
+            `
             : `
 
                 <label>
@@ -1143,7 +1235,9 @@ function showAddChannelForm() {
         ${apiKeyHtml}
 
 
-        <div class="form-actions">
+        <div
+            class="form-actions"
+        >
 
             <button
                 class="form-button form-save-button"
@@ -1172,33 +1266,45 @@ function showAddChannelForm() {
     );
 
 
-    document
-        .getElementById(
+    const saveButton =
+        document.getElementById(
             "save-channel-button"
-        )
-        .addEventListener(
-            "click",
-            connectYouTubeChannel
         );
 
 
-    document
-        .getElementById(
+    const cancelButton =
+        document.getElementById(
             "cancel-channel-button"
-        )
-        .addEventListener(
+        );
+
+
+    if (saveButton) {
+
+        saveButton.addEventListener(
+            "click",
+            connectYouTubeChannel
+        );
+    }
+
+
+    if (cancelButton) {
+
+        cancelButton.addEventListener(
             "click",
             () =>
                 updateContent()
         );
+    }
 }
 
 
 /* =========================================
-   URL PARSER
+   PARSE CHANNEL URL
    ========================================= */
 
-function parseYouTubeChannelUrl(url) {
+function parseYouTubeChannelUrl(
+    url
+) {
 
     let parsedUrl;
 
@@ -1256,25 +1362,11 @@ function parseYouTubeChannelUrl(url) {
         )
     ) {
 
-        const handle =
-            path
-                .substring(1);
-
-
-        if (!handle) {
-
-            return {
-                valid: false,
-                type: null,
-                value: null
-            };
-        }
-
-
         return {
             valid: true,
             type: "handle",
-            value: handle
+            value:
+                path.substring(1)
         };
     }
 
@@ -1285,26 +1377,13 @@ function parseYouTubeChannelUrl(url) {
         )
     ) {
 
-        const channelId =
-            path.substring(
-                "/channel/".length
-            );
-
-
-        if (!channelId) {
-
-            return {
-                valid: false,
-                type: null,
-                value: null
-            };
-        }
-
-
         return {
             valid: true,
             type: "id",
-            value: channelId
+            value:
+                path.substring(
+                    "/channel/".length
+                )
         };
     }
 
@@ -1315,26 +1394,13 @@ function parseYouTubeChannelUrl(url) {
         )
     ) {
 
-        const username =
-            path.substring(
-                "/user/".length
-            );
-
-
-        if (!username) {
-
-            return {
-                valid: false,
-                type: null,
-                value: null
-            };
-        }
-
-
         return {
             valid: true,
             type: "username",
-            value: username
+            value:
+                path.substring(
+                    "/user/".length
+                )
         };
     }
 
@@ -1345,26 +1411,13 @@ function parseYouTubeChannelUrl(url) {
         )
     ) {
 
-        const customName =
-            path.substring(
-                "/c/".length
-            );
-
-
-        if (!customName) {
-
-            return {
-                valid: false,
-                type: null,
-                value: null
-            };
-        }
-
-
         return {
             valid: true,
             type: "custom",
-            value: customName
+            value:
+                path.substring(
+                    "/c/".length
+                )
         };
     }
 
@@ -1465,7 +1518,7 @@ async function youtubeApiRequest(
 
 
 /* =========================================
-   FIND CHANNEL
+   FIND YOUTUBE CHANNEL
    ========================================= */
 
 async function findYouTubeChannel(
@@ -1515,14 +1568,6 @@ async function findYouTubeChannel(
         "custom"
     ) {
 
-        /*
-           Older /c/ addresses are not
-           directly supported by channels.list.
-
-           We use YouTube search to find
-           the channel.
-        */
-
         const searchResponse =
             await youtubeApiRequest(
                 "search",
@@ -1552,11 +1597,6 @@ async function findYouTubeChannel(
             );
         }
 
-
-        /*
-           Use the first matching channel
-           for now.
-        */
 
         const firstResult =
             searchResponse.items[0];
@@ -1612,8 +1652,8 @@ async function loadChannelVideos(
     const uploadsPlaylistId =
         channel
             .contentDetails
-            .relatedPlaylists
-            .uploads;
+            ?.relatedPlaylists
+            ?.uploads;
 
 
     if (!uploadsPlaylistId) {
@@ -1628,6 +1668,7 @@ async function loadChannelVideos(
         await youtubeApiRequest(
             "playlistItems",
             {
+
                 part:
                     "snippet,contentDetails",
 
@@ -1653,8 +1694,8 @@ async function loadChannelVideos(
             .map(
                 item =>
                     item
-                        .contentDetails
-                        .videoId
+                        ?.contentDetails
+                        ?.videoId
             )
             .filter(Boolean);
 
@@ -1671,6 +1712,7 @@ async function loadChannelVideos(
         await youtubeApiRequest(
             "videos",
             {
+
                 part:
                     "snippet,contentDetails",
 
@@ -1681,16 +1723,24 @@ async function loadChannelVideos(
 
 
     const videoMap =
-        new Map(
-            videoResponse.items
-                .map(
-                    item =>
-                        [
-                            item.id,
-                            item
-                        ]
-                )
+        new Map();
+
+
+    if (
+        videoResponse.items
+    ) {
+
+        videoResponse.items.forEach(
+            item => {
+
+                videoMap.set(
+                    item.id,
+                    item
+                );
+
+            }
         );
+    }
 
 
     return playlistResponse.items
@@ -1699,8 +1749,13 @@ async function loadChannelVideos(
 
                 const videoId =
                     item
-                        .contentDetails
-                        .videoId;
+                        ?.contentDetails
+                        ?.videoId;
+
+
+                if (!videoId) {
+                    return null;
+                }
 
 
                 const details =
@@ -1719,22 +1774,25 @@ async function loadChannelVideos(
                         videoId,
 
                     title:
-                        snippet.title,
+                        snippet?.title ||
+                        "Untitled video",
 
                     channel:
-                        snippet.channelTitle,
+                        snippet?.channelTitle ||
+                        channel?.snippet?.title ||
+                        "Unknown channel",
 
                     date:
                         formatYouTubeDate(
-                            snippet.publishedAt
+                            snippet?.publishedAt
                         ),
 
                     duration:
                         details
                             ? formatDuration(
                                 details
-                                    .contentDetails
-                                    .duration
+                                    ?.contentDetails
+                                    ?.duration
                             )
                             : "",
 
@@ -1752,24 +1810,37 @@ async function loadChannelVideos(
 
                     thumbnail:
                         snippet
-                            .thumbnails
+                            ?.thumbnails
+                            ?.maxres
+                            ?.url ||
+
+                        snippet
+                            ?.thumbnails
+                            ?.high
+                            ?.url ||
+
+                        snippet
+                            ?.thumbnails
                             ?.medium
                             ?.url ||
+
                         snippet
-                            .thumbnails
+                            ?.thumbnails
                             ?.default
                             ?.url ||
+
                         ""
 
                 };
 
             }
-        );
+        )
+        .filter(Boolean);
 }
 
 
 /* =========================================
-   ISO DATE
+   DATE FORMAT
    ========================================= */
 
 function formatYouTubeDate(
@@ -1800,16 +1871,23 @@ function formatYouTubeDate(
     return date.toLocaleDateString(
         "en-GB",
         {
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
+
+            day:
+                "2-digit",
+
+            month:
+                "short",
+
+            year:
+                "numeric"
+
         }
     );
 }
 
 
 /* =========================================
-   ISO 8601 DURATION
+   DURATION FORMAT
    ========================================= */
 
 function formatDuration(
@@ -1852,15 +1930,35 @@ function formatDuration(
 
     if (hours > 0) {
 
-        return `${hours}h ${String(minutes).padStart(2, "0")}m`;
-
+        return (
+            `${hours}h ` +
+            `${String(
+                minutes
+            ).padStart(
+                2,
+                "0"
+            )}m`
+        );
     }
 
 
     if (minutes > 0) {
 
-        return `${minutes}m`;
+        if (seconds > 0) {
 
+            return (
+                `${minutes}m ` +
+                `${String(
+                    seconds
+                ).padStart(
+                    2,
+                    "0"
+                )}s`
+            );
+        }
+
+
+        return `${minutes}m`;
     }
 
 
@@ -1869,7 +1967,7 @@ function formatDuration(
 
 
 /* =========================================
-   CONNECT CHANNEL
+   CONNECT YOUTUBE CHANNEL
    ========================================= */
 
 async function connectYouTubeChannel() {
@@ -1922,8 +2020,7 @@ async function connectYouTubeChannel() {
 
 
     /*
-       Save API key if this is the
-       first time we are using it.
+       Save API key on first use.
     */
 
     if (
@@ -1964,14 +2061,13 @@ async function connectYouTubeChannel() {
 
         button.textContent =
             "Connecting...";
-
     }
 
 
     try {
 
         /*
-           Find the actual channel.
+           Find real channel.
         */
 
         const channel =
@@ -1981,7 +2077,7 @@ async function connectYouTubeChannel() {
 
 
         /*
-           Download the latest videos.
+           Get latest videos.
         */
 
         const latestVideos =
@@ -1990,40 +2086,27 @@ async function connectYouTubeChannel() {
             );
 
 
-        /*
-           Create channel data.
-        */
-
         const channelId =
             channel.id;
 
 
-        const uploadsPlaylistId =
-            channel
-                .contentDetails
-                .relatedPlaylists
-                .uploads;
-
-
         const channelName =
             channel
-                .snippet
-                .title;
+                ?.snippet
+                ?.title ||
+            "YouTube Channel";
+
+
+        const uploadsPlaylistId =
+            channel
+                ?.contentDetails
+                ?.relatedPlaylists
+                ?.uploads ||
+            "";
 
 
         const channelUrl =
             `https://www.youtube.com/channel/${channelId}`;
-
-
-        /*
-           Check if already added.
-        */
-
-        const existingIndex =
-            channels.findIndex(
-                item =>
-                    item.id === channelId
-            );
 
 
         const newChannel = {
@@ -2045,9 +2128,14 @@ async function connectYouTubeChannel() {
 
             thumbnail:
                 channel
-                    .snippet
-                    .thumbnails
+                    ?.snippet
+                    ?.thumbnails
                     ?.default
+                    ?.url ||
+                channel
+                    ?.snippet
+                    ?.thumbnails
+                    ?.medium
                     ?.url ||
                 "",
 
@@ -2056,17 +2144,36 @@ async function connectYouTubeChannel() {
 
             addedAt:
                 new Date().toISOString()
+
         };
 
 
+        /*
+           Add or update channel.
+        */
+
+        const existingChannelIndex =
+            channels.findIndex(
+                item =>
+                    item.id ===
+                    channelId
+            );
+
+
         if (
-            existingIndex >= 0
+            existingChannelIndex >= 0
         ) {
 
             channels[
-                existingIndex
+                existingChannelIndex
             ] =
-                newChannel;
+                {
+                    ...channels[
+                        existingChannelIndex
+                    ],
+
+                    ...newChannel
+                };
 
         } else {
 
@@ -2080,18 +2187,18 @@ async function connectYouTubeChannel() {
 
 
         /*
-           Add new videos.
+           Add or update videos.
 
-           Do not destroy watched,
-           saved or downloaded states
-           if a video already exists.
+           Existing Watched,
+           Saved and Downloaded
+           statuses are preserved.
         */
 
         latestVideos.forEach(
             newVideo => {
 
-                const existingVideo =
-                    videos.find(
+                const existingIndex =
+                    videos.findIndex(
                         item =>
                             item.id ===
                             newVideo.id
@@ -2099,26 +2206,39 @@ async function connectYouTubeChannel() {
 
 
                 if (
-                    existingVideo
+                    existingIndex >= 0
                 ) {
 
-                    existingVideo.title =
-                        newVideo.title;
+                    const oldVideo =
+                        videos[
+                            existingIndex
+                        ];
 
-                    existingVideo.channel =
-                        newVideo.channel;
 
-                    existingVideo.date =
-                        newVideo.date;
+                    videos[
+                        existingIndex
+                    ] = {
 
-                    existingVideo.duration =
-                        newVideo.duration;
+                        ...oldVideo,
 
-                    existingVideo.youtubeUrl =
-                        newVideo.youtubeUrl;
+                        title:
+                            newVideo.title,
 
-                    existingVideo.thumbnail =
-                        newVideo.thumbnail;
+                        channel:
+                            newVideo.channel,
+
+                        date:
+                            newVideo.date,
+
+                        duration:
+                            newVideo.duration,
+
+                        youtubeUrl:
+                            newVideo.youtubeUrl,
+
+                        thumbnail:
+                            newVideo.thumbnail
+                    };
 
                 } else {
 
@@ -2132,7 +2252,7 @@ async function connectYouTubeChannel() {
 
 
         /*
-           Sort newest first.
+           Sort by published date.
         */
 
         videos.sort(
@@ -2143,11 +2263,14 @@ async function connectYouTubeChannel() {
 
                 const firstDate =
                     new Date(
+                        first.youtubePublishedAt ||
                         first.date
                     );
 
+
                 const secondDate =
                     new Date(
+                        second.youtubePublishedAt ||
                         second.date
                     );
 
@@ -2168,8 +2291,19 @@ async function connectYouTubeChannel() {
         );
 
 
-        updateContent();
+        /*
+           Go to New page.
+        */
 
+        currentPage =
+            "new";
+
+
+        saveCurrentPage();
+
+        updateNavigation();
+
+        updateContent();
 
     } catch (error) {
 
@@ -2208,15 +2342,6 @@ async function connectYouTubeChannel() {
 
         } else if (
             error.message ===
-            "forbidden"
-        ) {
-
-            alert(
-                "YouTube rejected the API request. Check that YouTube Data API v3 is enabled and your API key is correct."
-            );
-
-        } else if (
-            error.message ===
             "keyInvalid"
         ) {
 
@@ -2224,16 +2349,24 @@ async function connectYouTubeChannel() {
 
 
             alert(
-                "The YouTube API key is invalid. It has been removed. Please try again with the correct key."
+                "The YouTube API key is invalid. It has been removed."
+            );
+
+        } else if (
+            error.message ===
+            "forbidden"
+        ) {
+
+            alert(
+                "YouTube rejected the API request. Please check your API key and YouTube Data API v3."
             );
 
         } else {
 
             alert(
-                "Something went wrong while connecting to YouTube.\n\nPlease check the channel link, your API key, and that YouTube Data API v3 is enabled."
+                "Something went wrong while connecting to YouTube.\n\nPlease check the channel link, API key and YouTube Data API v3."
             );
         }
-
 
     } finally {
 
@@ -2259,34 +2392,36 @@ function setupChannelButtons() {
         .querySelectorAll(
             ".channel-card"
         )
-        .forEach(card => {
+        .forEach(
+            card => {
 
-            const channelId =
-                card.getAttribute(
-                    "data-channel-id"
+                const channelId =
+                    card.getAttribute(
+                        "data-channel-id"
+                    );
+
+
+                const deleteButton =
+                    card.querySelector(
+                        ".channel-delete-button"
+                    );
+
+
+                if (!deleteButton) {
+                    return;
+                }
+
+
+                deleteButton.addEventListener(
+                    "click",
+                    () =>
+                        deleteChannel(
+                            channelId
+                        )
                 );
 
-
-            const deleteButton =
-                card.querySelector(
-                    ".channel-delete-button"
-                );
-
-
-            if (!deleteButton) {
-                return;
             }
-
-
-            deleteButton.addEventListener(
-                "click",
-                () =>
-                    deleteChannel(
-                        channelId
-                    )
-            );
-
-        });
+        );
 }
 
 
@@ -2297,7 +2432,8 @@ function deleteChannel(
     const channel =
         channels.find(
             item =>
-                item.id === channelId
+                item.id ===
+                channelId
         );
 
 
@@ -2320,7 +2456,8 @@ function deleteChannel(
     channels =
         channels.filter(
             item =>
-                item.id !== channelId
+                item.id !==
+                channelId
         );
 
 
@@ -2336,57 +2473,8 @@ function deleteChannel(
 
 function startApp() {
 
-    const savedVideos =
+    videos =
         loadVideos();
-
-
-    savedVideos.forEach(
-        savedVideo => {
-
-            const video =
-                videos.find(
-                    item =>
-                        item.id ===
-                        savedVideo.id
-                );
-
-
-            if (!video) {
-                return;
-            }
-
-
-            video.watched =
-                Boolean(
-                    savedVideo.watched
-                );
-
-
-            video.saved =
-                Boolean(
-                    savedVideo.saved
-                );
-
-
-            video.downloaded =
-                Boolean(
-                    savedVideo.downloaded
-                );
-
-
-            video.youtubeUrl =
-                savedVideo.youtubeUrl ||
-                video.youtubeUrl ||
-                "";
-
-
-            video.thumbnail =
-                savedVideo.thumbnail ||
-                video.thumbnail ||
-                "";
-
-        }
-    );
 
 
     channels =
@@ -2401,7 +2489,7 @@ function startApp() {
 }
 
 
-/* ========================================
+/* =========================================
    START
    ========================================= */
 
