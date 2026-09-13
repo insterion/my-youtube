@@ -1,11 +1,13 @@
 /* =========================================
    MY YOUTUBE
    Main application stylesheet
-   Version 0.3
+   Version 0.6
    ========================================= */
 
 
-/* ---------- Basic reset ---------- */
+/* =========================================
+   BASIC RESET
+   ========================================= */
 
 * {
     box-sizing: border-box;
@@ -20,6 +22,7 @@ html {
 body {
     margin: 0;
     padding: 0;
+
     min-height: 100vh;
 
     background: #0b1120;
@@ -36,22 +39,25 @@ body {
 }
 
 
-/* ---------- Header ---------- */
+/* =========================================
+   HEADER
+   ========================================= */
 
 .app-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
 
+    position: sticky;
+    top: 0;
+
+    z-index: 20;
+
     padding: 18px 18px 14px;
 
     background: #111827;
 
     border-bottom: 1px solid #1f2937;
-
-    position: sticky;
-    top: 0;
-    z-index: 20;
 }
 
 .app-header h1 {
@@ -59,6 +65,7 @@ body {
 
     font-size: 22px;
     font-weight: 700;
+
     letter-spacing: 1px;
 }
 
@@ -66,6 +73,7 @@ body {
     margin: 4px 0 0;
 
     font-size: 13px;
+
     color: #94a3b8;
 }
 
@@ -87,19 +95,23 @@ body {
 }
 
 
-/* ---------- Main content ---------- */
+/* =========================================
+   MAIN CONTENT
+   ========================================= */
 
 .app-content {
     width: 100%;
-    max-width: 720px;
+    max-width: 760px;
 
     margin: 0 auto;
 
-    padding: 18px 14px 24px;
+    padding: 18px 14px 28px;
 }
 
 
-/* ---------- Section header ---------- */
+/* =========================================
+   SECTION HEADER
+   ========================================= */
 
 .section-header {
     display: flex;
@@ -122,20 +134,26 @@ body {
     margin-top: 4px;
 
     font-size: 13px;
+
     color: #60a5fa;
 }
 
 
-/* ---------- Video list ---------- */
+/* =========================================
+   VIDEO LIST
+   ========================================= */
 
 .video-list {
     display: flex;
     flex-direction: column;
+
     gap: 14px;
 }
 
 
-/* ---------- Video card ---------- */
+/* =========================================
+   VIDEO CARD
+   ========================================= */
 
 .video-card {
     display: flex;
@@ -149,18 +167,33 @@ body {
     border-radius: 16px;
 
     box-shadow:
-        0 8px 20px rgba(0, 0, 0, 0.18);
+        0 8px 22px rgba(0, 0, 0, 0.20);
 }
 
 
-/* ---------- Thumbnail ---------- */
+/* =========================================
+   THUMBNAIL
+   ========================================= */
 
 .thumbnail {
+    position: relative;
+
     width: 100%;
 
     aspect-ratio: 16 / 9;
 
+    overflow: hidden;
+
     background: #172033;
+}
+
+.thumbnail-image {
+    display: block;
+
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
 }
 
 .thumbnail-placeholder {
@@ -171,15 +204,20 @@ body {
     align-items: center;
     justify-content: center;
 
+    background: #172033;
+
     color: #64748b;
 
     font-size: 15px;
     font-weight: 700;
+
     letter-spacing: 1px;
 }
 
 
-/* ---------- Video information ---------- */
+/* =========================================
+   VIDEO INFORMATION
+   ========================================= */
 
 .video-info {
     padding: 14px;
@@ -190,6 +228,7 @@ body {
 
     font-size: 17px;
     line-height: 1.3;
+
     font-weight: 700;
 }
 
@@ -197,7 +236,9 @@ body {
     margin: 0 0 3px;
 
     font-size: 14px;
+
     color: #60a5fa;
+
     font-weight: 600;
 }
 
@@ -205,14 +246,18 @@ body {
     margin: 0 0 14px;
 
     font-size: 13px;
+
     color: #94a3b8;
 }
 
 
-/* ---------- Video buttons ---------- */
+/* =========================================
+   VIDEO ACTIONS
+   ========================================= */
 
 .video-actions {
     display: flex;
+
     gap: 8px;
 }
 
@@ -227,9 +272,8 @@ body {
 
     padding: 9px 10px;
 
-    border-radius: 10px;
-
     border: 1px solid #334155;
+    border-radius: 10px;
 
     background: #172033;
     color: #e2e8f0;
@@ -243,7 +287,8 @@ body {
 
     transition:
         transform 0.08s ease,
-        background 0.15s ease;
+        background 0.15s ease,
+        border-color 0.15s ease;
 }
 
 .action-button:active {
@@ -251,16 +296,22 @@ body {
 }
 
 
-/* Watch */
+/* =========================================
+   WATCH
+   ========================================= */
 
 .watch-button {
     background: #2563eb;
+
     border-color: #2563eb;
+
     color: white;
 }
 
 
-/* Watched */
+/* =========================================
+   WATCHED
+   ========================================= */
 
 .watched-button {
     color: #cbd5e1;
@@ -268,10 +319,16 @@ body {
 
 .watched-button.is-active {
     color: #86efac;
+
+    border-color: #166534;
+
+    background: #10251a;
 }
 
 
-/* Download */
+/* =========================================
+   DOWNLOAD
+   ========================================= */
 
 .download-button {
     color: #93c5fd;
@@ -279,10 +336,16 @@ body {
 
 .download-button.is-active {
     color: #86efac;
+
+    border-color: #166534;
+
+    background: #10251a;
 }
 
 
-/* Save */
+/* =========================================
+   SAVE
+   ========================================= */
 
 .save-button {
     color: #f8fafc;
@@ -290,13 +353,19 @@ body {
 
 .save-button.is-active {
     color: #facc15;
+
+    border-color: #854d0e;
+
+    background: #261f0b;
 }
 
 
-/* ---------- Empty state ---------- */
+/* =========================================
+   EMPTY STATE
+   ========================================= */
 
 .empty-state {
-    padding: 38px 18px;
+    padding: 40px 18px;
 
     text-align: center;
 
@@ -310,6 +379,7 @@ body {
     margin-bottom: 12px;
 
     font-size: 34px;
+
     color: #60a5fa;
 }
 
@@ -322,7 +392,7 @@ body {
 .empty-state p {
     margin: 0 auto 18px;
 
-    max-width: 320px;
+    max-width: 330px;
 
     color: #94a3b8;
 
@@ -330,36 +400,21 @@ body {
 }
 
 
-/* ---------- Add channel button ---------- */
-
-.add-channel-button {
-    min-height: 44px;
-
-    padding: 10px 18px;
-
-    border: 0;
-    border-radius: 10px;
-
-    background: #2563eb;
-    color: white;
-
-    font-size: 14px;
-    font-weight: 600;
-
-    cursor: pointer;
-}
-
-
-/* ---------- Channel list ---------- */
+/* =========================================
+   CHANNEL LIST
+   ========================================= */
 
 .channel-list {
     display: flex;
     flex-direction: column;
+
     gap: 12px;
 }
 
 
-/* ---------- Channel card ---------- */
+/* =========================================
+   CHANNEL CARD
+   ========================================= */
 
 .channel-card {
     padding: 15px;
@@ -372,8 +427,8 @@ body {
 
 .channel-card-header {
     display: flex;
-    justify-content: space-between;
     align-items: flex-start;
+    justify-content: space-between;
 
     gap: 12px;
 }
@@ -382,6 +437,7 @@ body {
     margin: 0;
 
     font-size: 17px;
+
     font-weight: 700;
 }
 
@@ -395,11 +451,41 @@ body {
     font-size: 12px;
 }
 
+
+/* =========================================
+   CHANNEL BUTTONS
+   ========================================= */
+
 .channel-card-actions {
     margin-top: 13px;
 
     display: flex;
+
     gap: 8px;
+}
+
+.add-channel-button {
+    width: 100%;
+
+    min-height: 44px;
+
+    margin-bottom: 12px;
+
+    padding: 10px 18px;
+
+    border: 0;
+    border-radius: 10px;
+
+    background: #2563eb;
+
+    color: white;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    -webkit-tap-highlight-color: transparent;
 }
 
 .channel-delete-button {
@@ -411,6 +497,7 @@ body {
     border-radius: 9px;
 
     background: #3f1212;
+
     color: #fca5a5;
 
     font-size: 13px;
@@ -420,11 +507,14 @@ body {
 }
 
 
-/* ---------- Add channel form ---------- */
+/* =========================================
+   CHANNEL FORM
+   ========================================= */
 
 .channel-form {
     display: flex;
     flex-direction: column;
+
     gap: 12px;
 
     margin-bottom: 16px;
@@ -446,6 +536,7 @@ body {
 .channel-form label {
     display: flex;
     flex-direction: column;
+
     gap: 6px;
 
     color: #cbd5e1;
@@ -478,6 +569,7 @@ body {
 
 .form-actions {
     display: flex;
+
     gap: 8px;
 
     margin-top: 4px;
@@ -500,6 +592,7 @@ body {
     border: 0;
 
     background: #2563eb;
+
     color: white;
 }
 
@@ -507,11 +600,14 @@ body {
     border: 1px solid #334155;
 
     background: #172033;
+
     color: #cbd5e1;
 }
 
 
-/* ---------- Bottom navigation ---------- */
+/* =========================================
+   BOTTOM NAVIGATION
+   ========================================= */
 
 .bottom-navigation {
     position: fixed;
@@ -523,7 +619,9 @@ body {
     z-index: 50;
 
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+
+    grid-template-columns:
+        repeat(4, 1fr);
 
     min-height: 70px;
 
@@ -531,12 +629,14 @@ body {
 
     border-top: 1px solid #1f2937;
 
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom:
+        env(safe-area-inset-bottom);
 }
 
 .nav-button {
     display: flex;
     flex-direction: column;
+
     align-items: center;
     justify-content: center;
 
@@ -545,6 +645,7 @@ body {
     border: 0;
 
     background: transparent;
+
     color: #64748b;
 
     font-size: 11px;
@@ -557,6 +658,7 @@ body {
 
 .nav-icon {
     font-size: 18px;
+
     line-height: 1;
 }
 
@@ -565,14 +667,29 @@ body {
 }
 
 
-/* ---------- Touch ---------- */
+/* =========================================
+   TOUCH
+   ========================================= */
 
 button {
     touch-action: manipulation;
 }
 
 
-/* ---------- Larger screens ---------- */
+/* =========================================
+   DISABLED BUTTON
+   ========================================= */
+
+button:disabled {
+    opacity: 0.65;
+
+    cursor: wait;
+}
+
+
+/* =========================================
+   LARGER SCREENS
+   ========================================= */
 
 @media (min-width: 600px) {
 
@@ -581,34 +698,45 @@ button {
         padding-right: 24px;
     }
 
+
     .app-content {
         padding-left: 20px;
         padding-right: 20px;
     }
 
+
     .video-card {
         flex-direction: row;
     }
 
+
     .thumbnail {
         width: 40%;
+
         min-width: 230px;
     }
+
 
     .video-info {
         flex: 1;
     }
 
+
     .bottom-navigation {
         left: 50%;
         right: auto;
 
-        width: 720px;
+        width: 760px;
         max-width: 100%;
 
-        transform: translateX(-50%);
+        transform:
+            translateX(-50%);
 
-        border-left: 1px solid #1f2937;
-        border-right: 1px solid #1f2937;
+        border-left:
+            1px solid #1f2937;
+
+        border-right:
+            1px solid #1f2937;
     }
+
 }
