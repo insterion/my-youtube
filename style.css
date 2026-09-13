@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application stylesheet
-   Version 0.7
+   Version 0.9
    ========================================= */
 
 
@@ -57,7 +57,8 @@ body {
 
     background: #111827;
 
-    border-bottom: 1px solid #1f2937;
+    border-bottom:
+        1px solid #1f2937;
 }
 
 .app-header h1 {
@@ -81,17 +82,21 @@ body {
     width: 42px;
     height: 42px;
 
-    border: 1px solid #334155;
+    border:
+        1px solid #334155;
+
     border-radius: 12px;
 
     background: #172033;
+
     color: #dbeafe;
 
     font-size: 21px;
 
     cursor: pointer;
 
-    -webkit-tap-highlight-color: transparent;
+    -webkit-tap-highlight-color:
+        transparent;
 }
 
 
@@ -118,6 +123,8 @@ body {
     align-items: center;
     justify-content: space-between;
 
+    gap: 12px;
+
     margin-bottom: 14px;
 }
 
@@ -140,11 +147,53 @@ body {
 
 
 /* =========================================
+   REFRESH BUTTON
+   ========================================= */
+
+.refresh-button {
+    flex: 0 0 auto;
+
+    min-height: 38px;
+
+    padding: 8px 12px;
+
+    border:
+        1px solid #334155;
+
+    border-radius: 10px;
+
+    background: #172033;
+
+    color: #93c5fd;
+
+    font-size: 12px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+
+    -webkit-tap-highlight-color:
+        transparent;
+}
+
+.refresh-button:active {
+    transform: scale(0.97);
+}
+
+.refresh-button:disabled {
+    opacity: 0.65;
+
+    cursor: wait;
+}
+
+
+/* =========================================
    VIDEO LIST
    ========================================= */
 
 .video-list {
     display: flex;
+
     flex-direction: column;
 
     gap: 14px;
@@ -157,18 +206,21 @@ body {
 
 .video-card {
     display: flex;
+
     flex-direction: column;
 
     overflow: hidden;
 
     background: #111827;
 
-    border: 1px solid #1f2937;
+    border:
+        1px solid #1f2937;
 
     border-radius: 16px;
 
     box-shadow:
-        0 8px 22px rgba(
+        0 8px 22px
+        rgba(
             0,
             0,
             0,
@@ -207,7 +259,9 @@ body {
     height: 100%;
 
     display: flex;
+
     align-items: center;
+
     justify-content: center;
 
     background: #172033;
@@ -215,6 +269,7 @@ body {
     color: #64748b;
 
     font-size: 15px;
+
     font-weight: 700;
 
     letter-spacing: 1px;
@@ -222,7 +277,7 @@ body {
 
 
 /* =========================================
-   VIDEO INFORMATION
+   VIDEO INFO
    ========================================= */
 
 .video-info {
@@ -259,7 +314,7 @@ body {
 
 
 /* =========================================
-   VIDEO ACTIONS
+   VIDEO BUTTONS
    ========================================= */
 
 .video-actions {
@@ -279,7 +334,8 @@ body {
 
     padding: 9px 10px;
 
-    border: 1px solid #334155;
+    border:
+        1px solid #334155;
 
     border-radius: 10px;
 
@@ -293,7 +349,8 @@ body {
 
     cursor: pointer;
 
-    -webkit-tap-highlight-color: transparent;
+    -webkit-tap-highlight-color:
+        transparent;
 
     transition:
         transform 0.08s ease,
@@ -381,7 +438,8 @@ body {
 
     background: #111827;
 
-    border: 1px solid #1f2937;
+    border:
+        1px solid #1f2937;
 
     border-radius: 16px;
 }
@@ -417,6 +475,7 @@ body {
 
 .channel-list {
     display: flex;
+
     flex-direction: column;
 
     gap: 12px;
@@ -432,13 +491,15 @@ body {
 
     background: #111827;
 
-    border: 1px solid #1f2937;
+    border:
+        1px solid #1f2937;
 
     border-radius: 15px;
 }
 
 .channel-card-header {
     display: flex;
+
     align-items: center;
 
     gap: 12px;
@@ -456,7 +517,8 @@ body {
 
     background: #172033;
 
-    border: 1px solid #334155;
+    border:
+        1px solid #334155;
 }
 
 .channel-card-name {
@@ -473,6 +535,15 @@ body {
     word-break: break-word;
 
     color: #94a3b8;
+
+    font-size: 12px;
+}
+
+.channel-last-refresh {
+    margin:
+        -2px 0 12px;
+
+    color: #64748b;
 
     font-size: 12px;
 }
@@ -513,7 +584,14 @@ body {
 
     cursor: pointer;
 
-    -webkit-tap-highlight-color: transparent;
+    -webkit-tap-highlight-color:
+        transparent;
+}
+
+.add-channel-button:disabled {
+    opacity: 0.65;
+
+    cursor: wait;
 }
 
 .channel-delete-button {
@@ -521,7 +599,8 @@ body {
 
     padding: 8px 13px;
 
-    border: 1px solid #7f1d1d;
+    border:
+        1px solid #7f1d1d;
 
     border-radius: 9px;
 
@@ -543,6 +622,7 @@ body {
 
 .channel-form {
     display: flex;
+
     flex-direction: column;
 
     gap: 12px;
@@ -553,7 +633,8 @@ body {
 
     background: #111827;
 
-    border: 1px solid #1f2937;
+    border:
+        1px solid #1f2937;
 
     border-radius: 16px;
 }
@@ -566,6 +647,7 @@ body {
 
 .channel-form label {
     display: flex;
+
     flex-direction: column;
 
     gap: 6px;
@@ -584,7 +666,8 @@ body {
 
     padding: 10px 12px;
 
-    border: 1px solid #334155;
+    border:
+        1px solid #334155;
 
     border-radius: 10px;
 
@@ -639,8 +722,15 @@ body {
     color: white;
 }
 
+.form-save-button:disabled {
+    opacity: 0.65;
+
+    cursor: wait;
+}
+
 .form-cancel-button {
-    border: 1px solid #334155;
+    border:
+        1px solid #334155;
 
     background: #172033;
 
@@ -670,7 +760,8 @@ body {
 
     background: #111827;
 
-    border-top: 1px solid #1f2937;
+    border-top:
+        1px solid #1f2937;
 
     padding-bottom:
         env(safe-area-inset-bottom);
@@ -678,6 +769,7 @@ body {
 
 .nav-button {
     display: flex;
+
     flex-direction: column;
 
     align-items: center;
@@ -698,7 +790,8 @@ body {
 
     cursor: pointer;
 
-    -webkit-tap-highlight-color: transparent;
+    -webkit-tap-highlight-color:
+        transparent;
 }
 
 .nav-icon {
@@ -718,12 +811,6 @@ body {
 
 button {
     touch-action: manipulation;
-}
-
-button:disabled {
-    opacity: 0.65;
-
-    cursor: wait;
 }
 
 
