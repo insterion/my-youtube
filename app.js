@@ -1,2690 +1,1189 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Version 1.0
+   Version 1.1
 
    Added:
    - Settings screen
    - API key management
-   - Change API key
-   - Remove API key
-   - Existing channel/video features
+   - Channel management
+   - Watched / Saved / Downloaded status
+   - Automatic refresh
+   - NEW video tracking
    ========================================= */
 
+const VIDEO_STORAGE_KEY = "my-youtube-videos";
+const CHANNEL_STORAGE_KEY = "my-youtube-channels";
+const PAGE_STORAGE_KEY = "my-youtube-page";
+const API_KEY_STORAGE_KEY = "my-youtube-api-key";
+const LAST_REFRESH_KEY = "my-youtube-last-refresh";
 
-/* =========================================
-   STORAGE KEYS
-   ========================================= */
-
-const VIDEO_STORAGE_KEY =
-    "my-youtube-videos";
-
-const CHANNEL_STORAGE_KEY =
-    "my-youtube-channels";
-
-const PAGE_STORAGE_KEY =
-    "my-youtube-page";
-
-const API_KEY_STORAGE_KEY =
-    "my-youtube-api-key";
-
-const LAST_REFRESH_KEY =
-    "my-youtube-last-refresh";
-
-
-/* =========================================
-   SETTINGS
-   ========================================= */
-
-const AUTO_REFRESH_INTERVAL =
-    30 * 60 * 1000;
-
-
-/* =========================================
-   DATA
-   ========================================= */
+const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000;
 
 let videos = [];
-
 let channels = [];
-
-let currentPage =
-    localStorage.getItem(
-        PAGE_STORAGE_KEY
-    ) || "new";
-
-let refreshInProgress =
-    false;
-
+let currentPage = localStorage.getItem(PAGE_STORAGE_KEY) || "new";
+let refreshInProgress = false;
 
 /* =========================================
    API KEY
    ========================================= */
 
 function getApiKey() {
-
-    return localStorage.getItem(
-        API_KEY_STORAGE_KEY
-    ) || "";
+    return localStorage.getItem(API_KEY_STORAGE_KEY) || "";
 }
-
 
 function saveApiKey(apiKey) {
-
-    localStorage.setItem(
-        API_KEY_STORAGE_KEY,
-        apiKey.trim()
-    );
+    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey.trim());
 }
-
 
 function removeApiKey() {
-
-    localStorage.removeItem(
-        API_KEY_STORAGE_KEY
-    );
+    localStorage.removeItem(API_KEY_STORAGE_KEY);
 }
 
-
 /* =========================================
-   VIDEO STORAGE
+   STORAGE
    ========================================= */
 
 function loadVideos() {
-
-    const saved =
-        localStorage.getItem(
-            VIDEO_STORAGE_KEY
-        );
-
-
-    if (!saved) {
-        return [];
-    }
-
+    const saved = localStorage.getItem(VIDEO_STORAGE_KEY);
+    if (!saved) return [];
 
     try {
+        const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed)) return [];
 
-        const parsed =
-            JSON.parse(saved);
-
-
-        if (!Array.isArray(parsed)) {
-            return [];
-        }
-
-
-        return parsed;
-
+        // Older videos from before NEW tracking are treated as existing,
+        // so they do not suddenly appear as brand-new.
+        return parsed.map(video => ({
+            ...video,
+            watched: Boolean(video.watched),
+            saved: Boolean(video.saved),
+            downloaded: Boolean(video.downloaded),
+            isNew: Boolean(video.isNew),
+            firstSeenAt: video.firstSeenAt || ""
+        }));
     } catch (error) {
-
-        console.log(
-            "Could not load videos.",
-            error
-        );
-
+        console.log("Could not load videos.", error);
         return [];
     }
 }
-
 
 function saveVideos() {
-
-    localStorage.setItem(
-        VIDEO_STORAGE_KEY,
-        JSON.stringify(videos)
-    );
+    localStorage.setItem(VIDEO_STORAGE_KEY, JSON.stringify(videos));
 }
-
-
-/* =========================================
-   CHANNEL STORAGE
-   ========================================= */
 
 function loadChannels() {
-
-    const saved =
-        localStorage.getItem(
-            CHANNEL_STORAGE_KEY
-        );
-
-
-    if (!saved) {
-        return [];
-    }
-
+    const saved = localStorage.getItem(CHANNEL_STORAGE_KEY);
+    if (!saved) return [];
 
     try {
-
-        const parsed =
-            JSON.parse(saved);
-
-
-        if (!Array.isArray(parsed)) {
-            return [];
-        }
-
-
-        return parsed;
-
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
     } catch (error) {
-
-        console.log(
-            "Could not load channels.",
-            error
-        );
-
+        console.log("Could not load channels.", error);
         return [];
     }
 }
 
-
 function saveChannels() {
-
-    localStorage.setItem(
-        CHANNEL_STORAGE_KEY,
-        JSON.stringify(channels)
-    );
+    localStorage.setItem(CHANNEL_STORAGE_KEY, JSON.stringify(channels));
 }
-
-
-/* =========================================
-   PAGE STORAGE
-   ========================================= */
 
 function saveCurrentPage() {
-
-    localStorage.setItem(
-        PAGE_STORAGE_KEY,
-        currentPage
-    );
+    localStorage.setItem(PAGE_STORAGE_KEY, currentPage);
 }
-
-
-/* =========================================
-   REFRESH STORAGE
-   ========================================= */
 
 function getLastRefreshTime() {
+    const saved = localStorage.getItem(LAST_REFRESH_KEY);
+    if (!saved) return 0;
 
-    const saved =
-        localStorage.getItem(
-            LAST_REFRESH_KEY
-        );
-
-
-    if (!saved) {
-        return 0;
-    }
-
-
-    const value =
-        Number(saved);
-
-
-    if (
-        Number.isNaN(value)
-    ) {
-
-        return 0;
-    }
-
-
-    return value;
+    const value = Number(saved);
+    return Number.isNaN(value) ? 0 : value;
 }
-
 
 function saveLastRefreshTime() {
-
-    localStorage.setItem(
-        LAST_REFRESH_KEY,
-        String(
-            Date.now()
-        )
-    );
+    localStorage.setItem(LAST_REFRESH_KEY, String(Date.now()));
 }
-
 
 /* =========================================
    NAVIGATION
    ========================================= */
 
 function setupNavigation() {
+    const navButtons = document.querySelectorAll(".nav-button");
 
-    const navButtons =
-        document.querySelectorAll(
-            ".nav-button"
-        );
+    navButtons.forEach((button, index) => {
+        button.addEventListener("click", () => {
+            const pages = ["new", "saved", "watched", "channels"];
+            if (!pages[index]) return;
 
-
-    navButtons.forEach(
-        (button, index) => {
-
-            button.addEventListener(
-                "click",
-                () => {
-
-                    const pages = [
-                        "new",
-                        "saved",
-                        "watched",
-                        "channels"
-                    ];
-
-
-                    currentPage =
-                        pages[index];
-
-
-                    saveCurrentPage();
-
-                    updateNavigation();
-
-                    updateContent();
-
-                }
-            );
-
-        }
-    );
+            currentPage = pages[index];
+            saveCurrentPage();
+            updateNavigation();
+            updateContent();
+        });
+    });
 }
 
-
 function updateNavigation() {
-
-    const navButtons =
-        document.querySelectorAll(
-            ".nav-button"
-        );
-
-
-    navButtons.forEach(
-        button => {
-
-            button.classList.remove(
-                "active"
-            );
-
-        }
-    );
-
+    const navButtons = document.querySelectorAll(".nav-button");
+    navButtons.forEach(button => button.classList.remove("active"));
 
     const pageIndexes = {
-
         new: 0,
         saved: 1,
         watched: 2,
         channels: 3
-
     };
 
-
-    const activeIndex =
-        pageIndexes[currentPage];
-
-
-    if (
-        navButtons[activeIndex]
-    ) {
-
-        navButtons[activeIndex]
-            .classList.add(
-                "active"
-            );
-    }
+    const activeButton = navButtons[pageIndexes[currentPage]];
+    if (activeButton) activeButton.classList.add("active");
 }
 
-
 /* =========================================
-   SETTINGS BUTTON
+   SETTINGS
    ========================================= */
 
 function setupSettingsButton() {
-
-    const button =
-        document.querySelector(
-            ".settings-button"
-        );
-
-
-    if (!button) {
-        return;
-    }
-
-
-    button.addEventListener(
-        "click",
-        openSettings
-    );
+    const button = document.querySelector(".settings-button");
+    if (button) button.addEventListener("click", openSettings);
 }
 
-
-/* =========================================
-   OPEN SETTINGS
-   ========================================= */
-
 function openSettings() {
-
     closeSettings();
 
+    const modal = document.createElement("div");
+    modal.className = "settings-overlay";
+    modal.id = "settings-overlay";
 
-    const modal =
-        document.createElement(
-            "div"
-        );
-
-
-    modal.className =
-        "settings-overlay";
-
-
-    modal.id =
-        "settings-overlay";
-
-
-    const apiKeySaved =
-        Boolean(
-            getApiKey()
-        );
-
+    const apiKeySaved = Boolean(getApiKey());
 
     modal.innerHTML = `
-
-        <div
-            class="settings-modal"
-            role="dialog"
-            aria-modal="true"
-        >
-
-            <div
-                class="settings-header"
-            >
-
+        <div class="settings-modal" role="dialog" aria-modal="true">
+            <div class="settings-header">
                 <div>
-
-                    <h2>
-                        Settings
-                    </h2>
-
-                    <p>
-                        My YouTube
-                    </p>
-
+                    <h2>Settings</h2>
+                    <p>My YouTube</p>
                 </div>
 
-
-                <button
-                    class="settings-close-button"
-                    id="close-settings-button"
-                    type="button"
-                    aria-label="Close settings"
-                >
-                    ×
-                </button>
-
+                <button class="settings-close-button"
+                        id="close-settings-button"
+                        type="button"
+                        aria-label="Close settings">×</button>
             </div>
 
+            <div class="settings-section">
+                <h3>YouTube API</h3>
 
-            <div
-                class="settings-section"
-            >
-
-                <h3>
-                    YouTube API
-                </h3>
-
-
-                <div
-                    class="settings-status ${
-                        apiKeySaved
-                            ? "settings-status-ok"
-                            : "settings-status-warning"
-                    }"
-                >
-
+                <div class="settings-status ${
+                    apiKeySaved
+                        ? "settings-status-ok"
+                        : "settings-status-warning"
+                }">
                     ${
                         apiKeySaved
                             ? "✓ API key saved on this device"
                             : "⚠ No API key saved"
                     }
-
                 </div>
 
-
-                <button
-                    class="settings-action-button"
-                    id="change-api-key-button"
-                    type="button"
-                >
+                <button class="settings-action-button"
+                        id="change-api-key-button"
+                        type="button">
                     Change API key
                 </button>
-
 
                 ${
                     apiKeySaved
                         ? `
-
-                            <button
-                                class="settings-danger-button"
-                                id="remove-api-key-button"
-                                type="button"
-                            >
+                            <button class="settings-danger-button"
+                                    id="remove-api-key-button"
+                                    type="button">
                                 Remove API key
                             </button>
-
                           `
                         : ""
                 }
-
             </div>
 
+            <div class="settings-section">
+                <h3>Channels</h3>
 
-            <div
-                class="settings-section"
-            >
-
-                <h3>
-                    Channels
-                </h3>
-
-
-                <p
-                    class="settings-description"
-                >
+                <p class="settings-description">
                     Following ${channels.length}
-                    channel${
-                        channels.length === 1
-                            ? ""
-                            : "s"
-                    }.
+                    channel${channels.length === 1 ? "" : "s"}.
                 </p>
 
-
-                <p
-                    class="settings-description"
-                >
-                    Automatic refresh:
-                    every 30 minutes while the
-                    app is open.
+                <p class="settings-description">
+                    Automatic refresh: every 30 minutes while the app is open.
                 </p>
-
             </div>
 
-
-            <div
-                class="settings-footer"
-            >
-
-                <button
-                    class="form-button form-cancel-button"
-                    id="close-settings-footer-button"
-                    type="button"
-                >
+            <div class="settings-footer">
+                <button class="form-button form-cancel-button"
+                        id="close-settings-footer-button"
+                        type="button">
                     Close
                 </button>
-
             </div>
-
         </div>
-
     `;
 
-
-    document.body.appendChild(
-        modal
-    );
-
+    document.body.appendChild(modal);
 
     document
-        .getElementById(
-            "close-settings-button"
-        )
-        .addEventListener(
-            "click",
-            closeSettings
-        );
-
+        .getElementById("close-settings-button")
+        ?.addEventListener("click", closeSettings);
 
     document
-        .getElementById(
-            "close-settings-footer-button"
-        )
-        .addEventListener(
-            "click",
-            closeSettings
-        );
-
+        .getElementById("close-settings-footer-button")
+        ?.addEventListener("click", closeSettings);
 
     document
-        .getElementById(
-            "change-api-key-button"
-        )
-        .addEventListener(
-            "click",
-            showChangeApiKeyForm
-        );
+        .getElementById("change-api-key-button")
+        ?.addEventListener("click", showChangeApiKeyForm);
 
+    document
+        .getElementById("remove-api-key-button")
+        ?.addEventListener("click", removeStoredApiKey);
 
-    const removeButton =
-        document.getElementById(
-            "remove-api-key-button"
-        );
-
-
-    if (removeButton) {
-
-        removeButton.addEventListener(
-            "click",
-            removeStoredApiKey
-        );
-    }
-
-
-    modal.addEventListener(
-        "click",
-        event => {
-
-            if (
-                event.target ===
-                modal
-            ) {
-
-                closeSettings();
-            }
-
-        }
-    );
+    modal.addEventListener("click", event => {
+        if (event.target === modal) closeSettings();
+    });
 }
-
-
-/* =========================================
-   CLOSE SETTINGS
-   ========================================= */
 
 function closeSettings() {
-
-    const modal =
-        document.getElementById(
-            "settings-overlay"
-        );
-
-
-    if (modal) {
-
-        modal.remove();
-    }
+    document.getElementById("settings-overlay")?.remove();
 }
 
-
-/* =========================================
-   CHANGE API KEY FORM
-   ========================================= */
-
 function showChangeApiKeyForm() {
+    const modal = document.getElementById("settings-overlay");
+    if (!modal) return;
 
-    const modal =
-        document.getElementById(
-            "settings-overlay"
-        );
+    const currentKey = getApiKey();
 
-
-    if (!modal) {
-        return;
-    }
-
-
-    const currentKey =
-        getApiKey();
-
-
-    modal.querySelector(
-        ".settings-modal"
-    ).innerHTML = `
-
-        <div
-            class="settings-header"
-        >
-
+    modal.querySelector(".settings-modal").innerHTML = `
+        <div class="settings-header">
             <div>
-
-                <h2>
-                    Change API key
-                </h2>
-
-                <p>
-                    Enter your new YouTube API key.
-                </p>
-
+                <h2>Change API key</h2>
+                <p>Enter your new YouTube API key.</p>
             </div>
 
-
-            <button
-                class="settings-close-button"
-                id="close-settings-button"
-                type="button"
-                aria-label="Close settings"
-            >
-                ×
-            </button>
-
+            <button class="settings-close-button"
+                    id="close-settings-button"
+                    type="button"
+                    aria-label="Close settings">×</button>
         </div>
 
-
-        <div
-            class="settings-section"
-        >
-
-            <label
-                class="settings-input-label"
-            >
-
+        <div class="settings-section">
+            <label class="settings-input-label">
                 YouTube API key
 
-                <input
-                    type="password"
-                    id="new-api-key-input"
-                    value="${escapeHtml(
-                        currentKey
-                    )}"
-                    placeholder="Paste API key"
-                    autocomplete="off"
-                >
-
+                <input type="password"
+                       id="new-api-key-input"
+                       value="${escapeHtml(currentKey)}"
+                       placeholder="Paste API key"
+                       autocomplete="off">
             </label>
 
-
-            <p
-                class="settings-description"
-            >
-                The key is stored locally in
-                this browser on this device.
+            <p class="settings-description">
+                The key is stored locally in this browser on this device.
             </p>
-
         </div>
 
-
-        <div
-            class="settings-footer"
-        >
-
-            <button
-                class="form-button form-save-button"
-                id="save-new-api-key-button"
-                type="button"
-            >
+        <div class="settings-footer">
+            <button class="form-button form-save-button"
+                    id="save-new-api-key-button"
+                    type="button">
                 Save API key
             </button>
 
-
-            <button
-                class="form-button form-cancel-button"
-                id="cancel-api-key-button"
-                type="button"
-            >
+            <button class="form-button form-cancel-button"
+                    id="cancel-api-key-button"
+                    type="button">
                 Cancel
             </button>
-
         </div>
-
     `;
 
+    document
+        .getElementById("close-settings-button")
+        ?.addEventListener("click", closeSettings);
 
     document
-        .getElementById(
-            "close-settings-button"
-        )
-        .addEventListener(
-            "click",
-            closeSettings
-        );
-
+        .getElementById("cancel-api-key-button")
+        ?.addEventListener("click", openSettings);
 
     document
-        .getElementById(
-            "cancel-api-key-button"
-        )
-        .addEventListener(
-            "click",
-            openSettings
-        );
-
-
-    document
-        .getElementById(
-            "save-new-api-key-button"
-        )
-        .addEventListener(
-            "click",
-            saveNewApiKey
-        );
+        .getElementById("save-new-api-key-button")
+        ?.addEventListener("click", saveNewApiKey);
 }
-
-
-/* =========================================
-   SAVE NEW API KEY
-   ========================================= */
 
 function saveNewApiKey() {
+    const input = document.getElementById("new-api-key-input");
+    if (!input) return;
 
-    const input =
-        document.getElementById(
-            "new-api-key-input"
-        );
-
-
-    if (!input) {
-        return;
-    }
-
-
-    const newKey =
-        input.value.trim();
-
+    const newKey = input.value.trim();
 
     if (!newKey) {
-
-        alert(
-            "Please enter an API key."
-        );
-
+        alert("Please enter an API key.");
         return;
     }
 
-
-    saveApiKey(
-        newKey
-    );
-
-
-    alert(
-        "API key saved."
-    );
-
-
+    saveApiKey(newKey);
+    alert("API key saved.");
     openSettings();
 }
-
-
-/* =========================================
-   REMOVE API KEY
-   ========================================= */
 
 function removeStoredApiKey() {
-
-    const confirmed =
-        confirm(
-            "Remove the saved YouTube API key from this device?"
-        );
-
-
-    if (!confirmed) {
+    if (!confirm("Remove the saved YouTube API key from this device?")) {
         return;
     }
 
-
     removeApiKey();
-
-
-    alert(
-        "API key removed."
-    );
-
-
+    alert("API key removed.");
     openSettings();
 }
-
 
 /* =========================================
    VIDEO FILTERING
    ========================================= */
 
 function getVisibleVideos() {
-
-    if (
-        currentPage ===
-        "new"
-    ) {
-
-        return videos.filter(
-            video =>
-                !video.watched
-        );
+    if (currentPage === "new") {
+        return videos.filter(video => video.isNew && !video.watched);
     }
 
-
-    if (
-        currentPage ===
-        "saved"
-    ) {
-
-        return videos.filter(
-            video =>
-                video.saved
-        );
+    if (currentPage === "saved") {
+        return videos.filter(video => video.saved);
     }
 
-
-    if (
-        currentPage ===
-        "watched"
-    ) {
-
-        return videos.filter(
-            video =>
-                video.watched
-        );
+    if (currentPage === "watched") {
+        return videos.filter(video => video.watched);
     }
-
 
     return [];
 }
 
-
 /* =========================================
-   SORT VIDEOS
+   SORTING
    ========================================= */
 
 function sortVideos() {
+    videos.sort((first, second) => {
+        const firstTime = new Date(
+            first.publishedAt || first.date || 0
+        ).getTime();
 
-    videos.sort(
-        (
-            first,
-            second
-        ) => {
+        const secondTime = new Date(
+            second.publishedAt || second.date || 0
+        ).getTime();
 
-            const firstTime =
-                new Date(
-                    first.publishedAt ||
-                    first.date ||
-                    0
-                ).getTime();
-
-
-            const secondTime =
-                new Date(
-                    second.publishedAt ||
-                    second.date ||
-                    0
-                ).getTime();
-
-
-            return (
-                secondTime -
-                firstTime
-            );
-        }
-    );
+        return secondTime - firstTime;
+    });
 }
 
-
 /* =========================================
-   UPDATE CONTENT
+   CONTENT
    ========================================= */
 
 function updateContent() {
+    const videoList = document.querySelector(".video-list");
+    const sectionTitle = document.querySelector(".section-header h2");
 
-    const videoList =
-        document.querySelector(
-            ".video-list"
-        );
+    if (!videoList || !sectionTitle) return;
 
-
-    const sectionTitle =
-        document.querySelector(
-            ".section-header h2"
-        );
-
-
-    if (
-        !videoList ||
-        !sectionTitle
-    ) {
-
-        return;
-    }
-
-
-    if (
-        currentPage ===
-        "channels"
-    ) {
-
+    if (currentPage === "channels") {
         renderChannelsPage();
-
         return;
     }
 
-
-    if (
-        currentPage ===
-        "new"
-    ) {
-
-        sectionTitle.textContent =
-            "New Videos";
-
-    } else if (
-        currentPage ===
-        "saved"
-    ) {
-
-        sectionTitle.textContent =
-            "Saved Videos";
-
-    } else if (
-        currentPage ===
-        "watched"
-    ) {
-
-        sectionTitle.textContent =
-            "Watched Videos";
+    if (currentPage === "new") {
+        sectionTitle.textContent = "New Videos";
+    } else if (currentPage === "saved") {
+        sectionTitle.textContent = "Saved Videos";
+    } else if (currentPage === "watched") {
+        sectionTitle.textContent = "Watched Videos";
     }
-
 
     addRefreshButton();
 
+    const visibleVideos = getVisibleVideos();
 
-    const visibleVideos =
-        getVisibleVideos();
-
-
-    if (
-        visibleVideos.length === 0
-    ) {
+    if (visibleVideos.length === 0) {
+        const message =
+            currentPage === "new"
+                ? "New videos will appear here when your followed channels upload them."
+                : "Videos will appear here when available.";
 
         videoList.innerHTML = `
-
             <div class="empty-state">
-
-                <div class="empty-icon">
-                    ○
-                </div>
-
-                <h3>
-                    Nothing here yet
-                </h3>
-
-                <p>
-                    Videos will appear here
-                    when available.
-                </p>
-
+                <div class="empty-icon">○</div>
+                <h3>Nothing here yet</h3>
+                <p>${escapeHtml(message)}</p>
             </div>
-
         `;
 
-
         updateNewVideoCount();
-
         return;
     }
 
-
-    videoList.innerHTML =
-        visibleVideos
-            .map(
-                video =>
-                    createVideoCard(
-                        video
-                    )
-            )
-            .join("");
-
+    videoList.innerHTML = visibleVideos
+        .map(video => createVideoCard(video))
+        .join("");
 
     setupVideoButtons();
-
     updateNewVideoCount();
 }
 
+function updateNewVideoCount() {
+    const count = videos.filter(
+        video => video.isNew && !video.watched
+    ).length;
+
+    const possibleElements = [
+        document.getElementById("new-video-count"),
+        document.querySelector(".new-video-count"),
+        document.querySelector(".nav-button[data-page='new'] .count")
+    ].filter(Boolean);
+
+    possibleElements.forEach(element => {
+        element.textContent = count > 0 ? String(count) : "";
+        element.style.display = count > 0 ? "" : "none";
+    });
+}
 
 /* =========================================
    REFRESH BUTTON
    ========================================= */
 
 function addRefreshButton() {
+    const sectionHeader = document.querySelector(".section-header");
+    if (!sectionHeader) return;
 
-    const sectionHeader =
-        document.querySelector(
-            ".section-header"
-        );
+    const existing = document.getElementById("refresh-page-button");
 
-
-    if (!sectionHeader) {
+    if (currentPage === "channels") {
+        existing?.remove();
         return;
     }
 
+    if (existing) return;
 
-    const existing =
-        document.getElementById(
-            "refresh-page-button"
-        );
+    const button = document.createElement("button");
+    button.id = "refresh-page-button";
+    button.className = "refresh-button";
+    button.type = "button";
+    button.textContent = "↻ Refresh";
 
+    button.addEventListener("click", () => {
+        refreshAllChannels(false);
+    });
 
-    if (
-        currentPage ===
-        "channels"
-    ) {
-
-        if (existing) {
-            existing.remove();
-        }
-
-        return;
-    }
-
-
-    if (existing) {
-        return;
-    }
-
-
-    const button =
-        document.createElement(
-            "button"
-        );
-
-
-    button.id =
-        "refresh-page-button";
-
-
-    button.className =
-        "refresh-button";
-
-
-    button.type =
-        "button";
-
-
-    button.textContent =
-        "↻ Refresh";
-
-
-    button.addEventListener(
-        "click",
-        () =>
-            refreshAllChannels(
-                false
-            )
-    );
-
-
-    sectionHeader.appendChild(
-        button
-    );
+    sectionHeader.appendChild(button);
 }
-
 
 /* =========================================
    VIDEO CARD
    ========================================= */
 
-function createVideoCard(
-    video
-) {
+function createVideoCard(video) {
+    const watchedText = video.watched ? "✓ Watched" : "○ Watched";
+    const savedText = video.saved ? "★ Saved" : "☆ Save";
+    const downloadedText = video.downloaded
+        ? "✓ Downloaded"
+        : "↓ Download";
 
-    const watchedText =
-        video.watched
-            ? "✓ Watched"
-            : "○ Watched";
+    const thumbnail = video.thumbnail
+        ? `
+            <img class="thumbnail-image"
+                 src="${escapeHtml(video.thumbnail)}"
+                 alt=""
+                 loading="lazy">
+          `
+        : `
+            <div class="thumbnail-placeholder">VIDEO</div>
+          `;
 
-
-    const savedText =
-        video.saved
-            ? "★ Saved"
-            : "☆ Save";
-
-
-    const downloadedText =
-        video.downloaded
-            ? "✓ Downloaded"
-            : "↓ Download";
-
-
-    const thumbnail =
-        video.thumbnail
-            ? `
-
-                <img
-                    class="thumbnail-image"
-                    src="${escapeHtml(
-                        video.thumbnail
-                    )}"
-                    alt=""
-                    loading="lazy"
-                >
-
-            `
-            : `
-
-                <div
-                    class="thumbnail-placeholder"
-                >
-                    VIDEO
-                </div>
-
-            `;
-
+    const newBadge = video.isNew && !video.watched
+        ? `
+            <span style="
+                position:absolute;
+                top:8px;
+                left:8px;
+                z-index:2;
+                padding:4px 8px;
+                border-radius:999px;
+                background:#2563eb;
+                color:#fff;
+                font-size:11px;
+                font-weight:700;
+                letter-spacing:.5px;
+            ">NEW</span>
+          `
+        : "";
 
     return `
+        <article class="video-card"
+                 data-video-id="${escapeHtml(video.id)}">
 
-        <article
-            class="video-card"
-            data-video-id="${escapeHtml(
-                video.id
-            )}"
-        >
-
-            <div class="thumbnail">
-
+            <div class="thumbnail" style="position:relative;">
                 ${thumbnail}
-
+                ${newBadge}
             </div>
 
-
             <div class="video-info">
-
-                <h3>
-                    ${escapeHtml(
-                        video.title
-                    )}
-                </h3>
-
+                <h3>${escapeHtml(video.title)}</h3>
 
                 <p class="channel-name">
-                    ${escapeHtml(
-                        video.channel
-                    )}
+                    ${escapeHtml(video.channel)}
                 </p>
-
 
                 <p class="video-date">
-
-                    ${escapeHtml(
-                        video.date
-                    )}
-
+                    ${escapeHtml(video.date)}
                     ${
                         video.duration
-                            ? `• ${escapeHtml(
-                                video.duration
-                              )}`
+                            ? ` • ${escapeHtml(video.duration)}`
                             : ""
                     }
-
                 </p>
 
-
                 <div class="video-actions">
-
-                    <button
-                        class="action-button watch-button"
-                        type="button"
-                    >
+                    <button class="action-button watch-button"
+                            type="button">
                         ▶ Watch
                     </button>
 
-
-                    <button
-                        class="action-button watched-button ${
-                            video.watched
-                                ? "is-active"
-                                : ""
-                        }"
-                        type="button"
-                    >
+                    <button class="action-button watched-button ${
+                        video.watched ? "is-active" : ""
+                    }"
+                            type="button">
                         ${watchedText}
                     </button>
-
                 </div>
 
-
-                <div
-                    class="video-actions secondary-actions"
-                >
-
-                    <button
-                        class="action-button download-button ${
-                            video.downloaded
-                                ? "is-active"
-                                : ""
-                        }"
-                        type="button"
-                    >
+                <div class="video-actions secondary-actions">
+                    <button class="action-button download-button ${
+                        video.downloaded ? "is-active" : ""
+                    }"
+                            type="button">
                         ${downloadedText}
                     </button>
 
-
-                    <button
-                        class="action-button save-button ${
-                            video.saved
-                                ? "is-active"
-                                : ""
-                        }"
-                        type="button"
-                    >
+                    <button class="action-button save-button ${
+                        video.saved ? "is-active" : ""
+                    }"
+                            type="button">
                         ${savedText}
                     </button>
-
                 </div>
-
             </div>
-
         </article>
-
     `;
 }
-
 
 /* =========================================
    HTML SAFETY
    ========================================= */
 
 function escapeHtml(text) {
-
-    return String(text)
-
-        .replaceAll(
-            "&",
-            "&amp;"
-        )
-
-        .replaceAll(
-            "<",
-            "&lt;"
-        )
-
-        .replaceAll(
-            ">",
-            "&gt;"
-        )
-
-        .replaceAll(
-            '"',
-            "&quot;"
-        )
-
-        .replaceAll(
-            "'",
-            "&#039;"
-        );
+    return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
-
 
 /* =========================================
    VIDEO BUTTONS
    ========================================= */
 
 function setupVideoButtons() {
+    document.querySelectorAll(".video-card").forEach(card => {
+        const videoId = card.getAttribute("data-video-id");
 
-    document
-        .querySelectorAll(
-            ".video-card"
-        )
-        .forEach(
-            card => {
+        card.querySelector(".watch-button")
+            ?.addEventListener("click", () => watchVideo(videoId));
 
-                const videoId =
-                    card.getAttribute(
-                        "data-video-id"
-                    );
+        card.querySelector(".watched-button")
+            ?.addEventListener("click", () => toggleWatched(videoId));
 
+        card.querySelector(".save-button")
+            ?.addEventListener("click", () => toggleSaved(videoId));
 
-                const watchButton =
-                    card.querySelector(
-                        ".watch-button"
-                    );
-
-
-                const watchedButton =
-                    card.querySelector(
-                        ".watched-button"
-                    );
-
-
-                const saveButton =
-                    card.querySelector(
-                        ".save-button"
-                    );
-
-
-                const downloadButton =
-                    card.querySelector(
-                        ".download-button"
-                    );
-
-
-                if (
-                    watchButton
-                ) {
-
-                    watchButton.addEventListener(
-                        "click",
-                        () =>
-                            watchVideo(
-                                videoId
-                            )
-                    );
-                }
-
-
-                if (
-                    watchedButton
-                ) {
-
-                    watchedButton.addEventListener(
-                        "click",
-                        () =>
-                            toggleWatched(
-                                videoId
-                            )
-                    );
-                }
-
-
-                if (
-                    saveButton
-                ) {
-
-                    saveButton.addEventListener(
-                        "click",
-                        () =>
-                            toggleSaved(
-                                videoId
-                            )
-                    );
-                }
-
-
-                if (
-                    downloadButton
-                ) {
-
-                    downloadButton.addEventListener(
-                        "click",
-                        () =>
-                            toggleDownloaded(
-                                videoId
-                            )
-                    );
-                }
-
-            }
-        );
+        card.querySelector(".download-button")
+            ?.addEventListener("click", () => toggleDownloaded(videoId));
+    });
 }
 
+function watchVideo(videoId) {
+    const video = videos.find(item => item.id === videoId);
+    if (!video) return;
 
-/* =========================================
-   WATCH VIDEO
-   ========================================= */
-
-function watchVideo(
-    videoId
-) {
-
-    const video =
-        videos.find(
-            item =>
-                item.id ===
-                videoId
-        );
-
-
-    if (!video) {
-        return;
+    if (video.youtubeUrl) {
+        window.open(video.youtubeUrl, "_blank");
+    } else {
+        alert("No YouTube link is available.");
     }
-
-
-    if (
-        video.youtubeUrl
-    ) {
-
-        window.open(
-            video.youtubeUrl,
-            "_blank"
-        );
-
-        return;
-    }
-
-
-    alert(
-        "No YouTube link is available."
-    );
 }
 
+function toggleWatched(videoId) {
+    const video = videos.find(item => item.id === videoId);
+    if (!video) return;
 
-/* =========================================
-   WATCHED
-   ========================================= */
+    video.watched = !video.watched;
 
-function toggleWatched(
-    videoId
-) {
-
-    const video =
-        videos.find(
-            item =>
-                item.id ===
-                videoId
-        );
-
-
-    if (!video) {
-        return;
+    // Once the user marks a video as watched, it is no longer NEW.
+    if (video.watched) {
+        video.isNew = false;
     }
-
-
-    video.watched =
-        !video.watched;
-
 
     saveVideos();
-
     updateContent();
 }
 
+function toggleSaved(videoId) {
+    const video = videos.find(item => item.id === videoId);
+    if (!video) return;
 
-/* =========================================
-   SAVED
-   ========================================= */
-
-function toggleSaved(
-    videoId
-) {
-
-    const video =
-        videos.find(
-            item =>
-                item.id ===
-                videoId
-        );
-
-
-    if (!video) {
-        return;
-    }
-
-
-    video.saved =
-        !video.saved;
-
-
+    video.saved = !video.saved;
     saveVideos();
-
     updateContent();
 }
 
-
-/* =========================================
-   DOWNLOADED STATUS
-   ========================================= */
-
-function toggleDownloaded(
-    videoId
-) {
-
-    const video =
-        videos.find(
-            item =>
-                item.id ===
-                videoId
-        );
-
-
-    if (!video) {
-        return;
-    }
-
+function toggleDownloaded(videoId) {
+    const video = videos.find(item => item.id === videoId);
+    if (!video) return;
 
     /*
        Status only for now.
-
-       No actual file download yet.
+       No actual YouTube file download is performed.
     */
-
-    video.downloaded =
-        !video.downloaded;
-
+    video.downloaded = !video.downloaded;
 
     saveVideos();
-
     updateContent();
 }
 
-
 /* =========================================
-   PARSE YOUTUBE CHANNEL URL
+   YOUTUBE CHANNEL URL
    ========================================= */
 
-function parseYouTubeChannelUrl(
-    url
-) {
-
+function parseYouTubeChannelUrl(url) {
     let parsedUrl;
 
-
     try {
-
-        parsedUrl =
-            new URL(url);
-
+        parsedUrl = new URL(url);
     } catch (error) {
-
-        return {
-            valid: false,
-            type: null,
-            value: null
-        };
+        return { valid: false, type: null, value: null };
     }
 
-
-    const hostname =
-        parsedUrl.hostname
-            .toLowerCase()
-            .replace(
-                /^www\./,
-                ""
-            );
-
+    const hostname = parsedUrl.hostname
+        .toLowerCase()
+        .replace(/^www\./, "");
 
     if (
-        hostname !==
-            "youtube.com" &&
-        hostname !==
-            "m.youtube.com"
+        hostname !== "youtube.com" &&
+        hostname !== "m.youtube.com"
     ) {
+        return { valid: false, type: null, value: null };
+    }
 
+    const path = parsedUrl.pathname.replace(/\/+$/, "");
+
+    if (path.startsWith("/@")) {
         return {
-            valid: false,
-            type: null,
-            value: null
+            valid: true,
+            type: "handle",
+            value: path.substring(1)
         };
     }
 
-
-    const path =
-        parsedUrl.pathname
-            .replace(
-                /\/+$/,
-                ""
-            );
-
-
-    if (
-        path.startsWith(
-            "/@"
-        )
-    ) {
-
+    if (path.startsWith("/channel/")) {
         return {
-
-            valid:
-                true,
-
-            type:
-                "handle",
-
-            value:
-                path.substring(1)
-
+            valid: true,
+            type: "id",
+            value: path.substring("/channel/".length)
         };
     }
 
-
-    if (
-        path.startsWith(
-            "/channel/"
-        )
-    ) {
-
+    if (path.startsWith("/user/")) {
         return {
-
-            valid:
-                true,
-
-            type:
-                "id",
-
-            value:
-                path.substring(
-                    "/channel/".length
-                )
-
+            valid: true,
+            type: "username",
+            value: path.substring("/user/".length)
         };
     }
 
-
-    if (
-        path.startsWith(
-            "/user/"
-        )
-    ) {
-
-        return {
-
-            valid:
-                true,
-
-            type:
-                "username",
-
-            value:
-                path.substring(
-                    "/user/".length
-                )
-
-        };
-    }
-
-
-    return {
-
-        valid:
-            false,
-
-        type:
-            null,
-
-        value:
-            null
-
-    };
+    return { valid: false, type: null, value: null };
 }
-
 
 /* =========================================
    YOUTUBE API REQUEST
    ========================================= */
 
-async function youtubeApiRequest(
-    endpoint,
-    parameters
-) {
-
-    const apiKey =
-        getApiKey();
-
+async function youtubeApiRequest(endpoint, parameters) {
+    const apiKey = getApiKey();
 
     if (!apiKey) {
-
-        throw new Error(
-            "NO_API_KEY"
-        );
+        throw new Error("NO_API_KEY");
     }
 
-
-    const url =
-        new URL(
-            `https://www.googleapis.com/youtube/v3/${endpoint}`
-        );
-
-
-    Object.entries(
-        parameters
-    ).forEach(
-        ([key, value]) => {
-
-            url.searchParams.set(
-                key,
-                value
-            );
-
-        }
+    const url = new URL(
+        `https://www.googleapis.com/youtube/v3/${endpoint}`
     );
 
+    Object.entries(parameters).forEach(([key, value]) => {
+        url.searchParams.set(key, value);
+    });
 
-    url.searchParams.set(
-        "key",
-        apiKey
-    );
+    // Keep the existing working API-key method for now.
+    // The key itself is protected by Google Cloud restrictions.
+    url.searchParams.set("key", apiKey);
 
-
-    const response =
-        await fetch(
-            url.toString()
-        );
-
+    const response = await fetch(url.toString());
 
     let data;
 
-
     try {
-
-        data =
-            await response.json();
-
+        data = await response.json();
     } catch (error) {
-
-        throw new Error(
-            "INVALID_API_RESPONSE"
-        );
+        throw new Error("INVALID_API_RESPONSE");
     }
 
-
     if (!response.ok) {
-
         const reason =
             data?.error?.errors?.[0]?.reason ||
             data?.error?.message ||
             "UNKNOWN_API_ERROR";
 
-
-        throw new Error(
-            reason
-        );
+        throw new Error(reason);
     }
-
 
     return data;
 }
-
 
 /* =========================================
    FIND CHANNEL
    ========================================= */
 
-async function findYouTubeChannel(
-    parsedUrl
-) {
-
-    let parameters = {
-
-        part:
-            "snippet,contentDetails"
-
+async function findYouTubeChannel(parsedUrl) {
+    const parameters = {
+        part: "snippet,contentDetails"
     };
 
-
-    if (
-        parsedUrl.type ===
-        "handle"
-    ) {
-
-        parameters.forHandle =
-            parsedUrl.value;
-
-    } else if (
-        parsedUrl.type ===
-        "id"
-    ) {
-
-        parameters.id =
-            parsedUrl.value;
-
-    } else if (
-        parsedUrl.type ===
-        "username"
-    ) {
-
-        parameters.forUsername =
-            parsedUrl.value;
-
+    if (parsedUrl.type === "handle") {
+        parameters.forHandle = parsedUrl.value;
+    } else if (parsedUrl.type === "id") {
+        parameters.id = parsedUrl.value;
+    } else if (parsedUrl.type === "username") {
+        parameters.forUsername = parsedUrl.value;
     } else {
-
-        throw new Error(
-            "UNSUPPORTED_CHANNEL_URL"
-        );
+        throw new Error("UNSUPPORTED_CHANNEL_URL");
     }
 
+    const response = await youtubeApiRequest(
+        "channels",
+        parameters
+    );
 
-    const response =
-        await youtubeApiRequest(
-            "channels",
-            parameters
-        );
-
-
-    if (
-        !response.items ||
-        response.items.length === 0
-    ) {
-
-        throw new Error(
-            "CHANNEL_NOT_FOUND"
-        );
+    if (!response.items || response.items.length === 0) {
+        throw new Error("CHANNEL_NOT_FOUND");
     }
-
 
     return response.items[0];
 }
-
 
 /* =========================================
    LOAD CHANNEL VIDEOS
    ========================================= */
 
-async function loadChannelVideos(
-    channel
-) {
-
+async function loadChannelVideos(channel) {
     const playlistId =
-        channel
-            ?.contentDetails
-            ?.relatedPlaylists
-            ?.uploads;
-
+        channel?.contentDetails?.relatedPlaylists?.uploads;
 
     if (!playlistId) {
-
-        throw new Error(
-            "UPLOADS_PLAYLIST_NOT_FOUND"
-        );
+        throw new Error("UPLOADS_PLAYLIST_NOT_FOUND");
     }
 
+    const playlistResponse = await youtubeApiRequest(
+        "playlistItems",
+        {
+            part: "snippet,contentDetails",
+            playlistId,
+            maxResults: "10"
+        }
+    );
 
-    const playlistResponse =
-        await youtubeApiRequest(
-            "playlistItems",
-            {
+    if (!playlistResponse.items) return [];
 
-                part:
-                    "snippet,contentDetails",
+    const videoIds = playlistResponse.items
+        .map(item => item?.contentDetails?.videoId)
+        .filter(Boolean);
 
-                playlistId:
-                    playlistId,
+    if (videoIds.length === 0) return [];
 
-                maxResults:
-                    "10"
+    const videoResponse = await youtubeApiRequest(
+        "videos",
+        {
+            part: "snippet,contentDetails",
+            id: videoIds.join(",")
+        }
+    );
 
-            }
-        );
+    const videoMap = new Map();
 
-
-    if (
-        !playlistResponse.items
-    ) {
-
-        return [];
-    }
-
-
-    const videoIds =
-        playlistResponse.items
-
-            .map(
-                item =>
-                    item
-                        ?.contentDetails
-                        ?.videoId
-            )
-
-            .filter(Boolean);
-
-
-    if (
-        videoIds.length === 0
-    ) {
-
-        return [];
-    }
-
-
-    const videoResponse =
-        await youtubeApiRequest(
-            "videos",
-            {
-
-                part:
-                    "snippet,contentDetails",
-
-                id:
-                    videoIds.join(",")
-
-            }
-        );
-
-
-    const videoMap =
-        new Map();
-
-
-    if (
-        videoResponse.items
-    ) {
-
-        videoResponse.items.forEach(
-            item => {
-
-                videoMap.set(
-                    item.id,
-                    item
-                );
-
-            }
-        );
-    }
-
+    (videoResponse.items || []).forEach(item => {
+        videoMap.set(item.id, item);
+    });
 
     return playlistResponse.items
+        .map(item => {
+            const videoId = item?.contentDetails?.videoId;
+            if (!videoId) return null;
 
-        .map(
-            item => {
+            const details = videoMap.get(videoId);
+            const snippet = item.snippet;
+            const publishedAt = snippet?.publishedAt || "";
 
-                const videoId =
-                    item
-                        ?.contentDetails
-                        ?.videoId;
-
-
-                if (!videoId) {
-                    return null;
-                }
-
-
-                const details =
-                    videoMap.get(
-                        videoId
-                    );
-
-
-                const snippet =
-                    item.snippet;
-
-
-                const publishedAt =
-                    snippet
-                        ?.publishedAt ||
-                    "";
-
-
-                return {
-
-                    id:
-                        videoId,
-
-                    title:
-                        snippet?.title ||
-                        "Untitled video",
-
-                    channel:
-                        snippet?.channelTitle ||
-                        channel
-                            ?.snippet
-                            ?.title ||
-                        "Unknown channel",
-
-                    channelId:
-                        channel.id,
-
-                    date:
-                        formatYouTubeDate(
-                            publishedAt
-                        ),
-
-                    publishedAt:
-                        publishedAt,
-
-                    duration:
-                        details
-                            ? formatDuration(
-                                details
-                                    ?.contentDetails
-                                    ?.duration
-                            )
-                            : "",
-
-                    watched:
-                        false,
-
-                    saved:
-                        false,
-
-                    downloaded:
-                        false,
-
-                    youtubeUrl:
-                        `https://www.youtube.com/watch?v=${videoId}`,
-
-                    thumbnail:
-                        snippet
-                            ?.thumbnails
-                            ?.maxres
-                            ?.url ||
-
-                        snippet
-                            ?.thumbnails
-                            ?.high
-                            ?.url ||
-
-                        snippet
-                            ?.thumbnails
-                            ?.medium
-                            ?.url ||
-
-                        snippet
-                            ?.thumbnails
-                            ?.default
-                            ?.url ||
-
-                        ""
-
-                };
-
-            }
-        )
-
+            return createVideoObject({
+                id: videoId,
+                title: snippet?.title || "Untitled video",
+                channel:
+                    snippet?.channelTitle ||
+                    channel?.snippet?.title ||
+                    "Unknown channel",
+                channelId: channel.id,
+                publishedAt,
+                duration: details
+                    ? formatDuration(details?.contentDetails?.duration)
+                    : "",
+                thumbnail:
+                    snippet?.thumbnails?.maxres?.url ||
+                    snippet?.thumbnails?.high?.url ||
+                    snippet?.thumbnails?.medium?.url ||
+                    snippet?.thumbnails?.default?.url ||
+                    ""
+            });
+        })
         .filter(Boolean);
 }
 
+function createVideoObject(data) {
+    return {
+        id: data.id,
+        title: data.title,
+        channel: data.channel,
+        channelId: data.channelId,
+        date: formatYouTubeDate(data.publishedAt),
+        publishedAt: data.publishedAt,
+        duration: data.duration || "",
+        watched: false,
+        saved: false,
+        downloaded: false,
+        isNew: true,
+        firstSeenAt: new Date().toISOString(),
+        youtubeUrl:
+            `https://www.youtube.com/watch?v=${data.id}`,
+        thumbnail: data.thumbnail || ""
+    };
+}
 
 /* =========================================
    LOAD SAVED CHANNEL
    ========================================= */
 
-async function loadVideosFromSavedChannel(
-    savedChannel
-) {
-
-    if (
-        !savedChannel.uploadsPlaylistId
-    ) {
-
-        const parsedUrl =
-            parseYouTubeChannelUrl(
-                savedChannel.originalUrl ||
-                savedChannel.url
-            );
-
+async function loadVideosFromSavedChannel(savedChannel) {
+    if (!savedChannel.uploadsPlaylistId) {
+        const parsedUrl = parseYouTubeChannelUrl(
+            savedChannel.originalUrl || savedChannel.url
+        );
 
         if (!parsedUrl.valid) {
-
-            throw new Error(
-                "CHANNEL_NOT_FOUND"
-            );
+            throw new Error("CHANNEL_NOT_FOUND");
         }
 
-
-        const channel =
-            await findYouTubeChannel(
-                parsedUrl
-            );
-
-
-        return loadChannelVideos(
-            channel
-        );
+        const channel = await findYouTubeChannel(parsedUrl);
+        return loadChannelVideos(channel);
     }
 
+    const playlistResponse = await youtubeApiRequest(
+        "playlistItems",
+        {
+            part: "snippet,contentDetails",
+            playlistId: savedChannel.uploadsPlaylistId,
+            maxResults: "10"
+        }
+    );
 
-    const playlistResponse =
-        await youtubeApiRequest(
-            "playlistItems",
-            {
+    if (!playlistResponse.items) return [];
 
-                part:
-                    "snippet,contentDetails",
+    const videoIds = playlistResponse.items
+        .map(item => item?.contentDetails?.videoId)
+        .filter(Boolean);
 
-                playlistId:
-                    savedChannel.uploadsPlaylistId,
+    if (videoIds.length === 0) return [];
 
-                maxResults:
-                    "10"
+    const videoResponse = await youtubeApiRequest(
+        "videos",
+        {
+            part: "snippet,contentDetails",
+            id: videoIds.join(",")
+        }
+    );
 
-            }
-        );
+    const videoMap = new Map();
 
-
-    if (
-        !playlistResponse.items
-    ) {
-
-        return [];
-    }
-
-
-    const videoIds =
-        playlistResponse.items
-
-            .map(
-                item =>
-                    item
-                        ?.contentDetails
-                        ?.videoId
-            )
-
-            .filter(Boolean);
-
-
-    if (
-        videoIds.length === 0
-    ) {
-
-        return [];
-    }
-
-
-    const videoResponse =
-        await youtubeApiRequest(
-            "videos",
-            {
-
-                part:
-                    "snippet,contentDetails",
-
-                id:
-                    videoIds.join(",")
-
-            }
-        );
-
-
-    const videoMap =
-        new Map();
-
-
-    if (
-        videoResponse.items
-    ) {
-
-        videoResponse.items.forEach(
-            item => {
-
-                videoMap.set(
-                    item.id,
-                    item
-                );
-
-            }
-        );
-    }
-
+    (videoResponse.items || []).forEach(item => {
+        videoMap.set(item.id, item);
+    });
 
     return playlistResponse.items
+        .map(item => {
+            const videoId = item?.contentDetails?.videoId;
+            if (!videoId) return null;
 
-        .map(
-            item => {
+            const details = videoMap.get(videoId);
+            const snippet = item.snippet;
+            const publishedAt = snippet?.publishedAt || "";
 
-                const videoId =
-                    item
-                        ?.contentDetails
-                        ?.videoId;
-
-
-                if (!videoId) {
-                    return null;
-                }
-
-
-                const details =
-                    videoMap.get(
-                        videoId
-                    );
-
-
-                const snippet =
-                    item.snippet;
-
-
-                const publishedAt =
-                    snippet
-                        ?.publishedAt ||
-                    "";
-
-
-                return {
-
-                    id:
-                        videoId,
-
-                    title:
-                        snippet?.title ||
-                        "Untitled video",
-
-                    channel:
-                        snippet?.channelTitle ||
-                        savedChannel.name ||
-                        "Unknown channel",
-
-                    channelId:
-                        savedChannel.id,
-
-                    date:
-                        formatYouTubeDate(
-                            publishedAt
-                        ),
-
-                    publishedAt:
-                        publishedAt,
-
-                    duration:
-                        details
-                            ? formatDuration(
-                                details
-                                    ?.contentDetails
-                                    ?.duration
-                            )
-                            : "",
-
-                    watched:
-                        false,
-
-                    saved:
-                        false,
-
-                    downloaded:
-                        false,
-
-                    youtubeUrl:
-                        `https://www.youtube.com/watch?v=${videoId}`,
-
-                    thumbnail:
-                        snippet
-                            ?.thumbnails
-                            ?.maxres
-                            ?.url ||
-
-                        snippet
-                            ?.thumbnails
-                            ?.high
-                            ?.url ||
-
-                        snippet
-                            ?.thumbnails
-                            ?.medium
-                            ?.url ||
-
-                        snippet
-                            ?.thumbnails
-                            ?.default
-                            ?.url ||
-
-                        ""
-
-                };
-
-            }
-        )
-
+            return createVideoObject({
+                id: videoId,
+                title: snippet?.title || "Untitled video",
+                channel:
+                    snippet?.channelTitle ||
+                    savedChannel.name ||
+                    "Unknown channel",
+                channelId: savedChannel.id,
+                publishedAt,
+                duration: details
+                    ? formatDuration(details?.contentDetails?.duration)
+                    : "",
+                thumbnail:
+                    snippet?.thumbnails?.maxres?.url ||
+                    snippet?.thumbnails?.high?.url ||
+                    snippet?.thumbnails?.medium?.url ||
+                    snippet?.thumbnails?.default?.url ||
+                    ""
+            });
+        })
         .filter(Boolean);
 }
 
-
 /* =========================================
-   DATE FORMAT
+   DATE / TIME
    ========================================= */
 
-function formatYouTubeDate(
-    dateString
-) {
+function formatYouTubeDate(dateString) {
+    if (!dateString) return "";
 
-    if (!dateString) {
-        return "";
-    }
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "";
 
-
-    const date =
-        new Date(
-            dateString
-        );
-
-
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
-
-        return "";
-    }
-
-
-    return date.toLocaleDateString(
-        "en-GB",
-        {
-
-            day:
-                "2-digit",
-
-            month:
-                "short",
-
-            year:
-                "numeric"
-
-        }
-    );
+    return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+    });
 }
 
+function formatDateTime(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    return date.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
+function getLastRefreshText() {
+    const timestamp = getLastRefreshTime();
+    if (!timestamp) return "";
+
+    return `Last refreshed: ${formatDateTime(new Date(timestamp))}`;
+}
 
 /* =========================================
-   DURATION FORMAT
+   DURATION
    ========================================= */
 
-function formatDuration(
-    isoDuration
-) {
+function formatDuration(isoDuration) {
+    if (!isoDuration) return "";
 
-    if (!isoDuration) {
-        return "";
-    }
+    const match = isoDuration.match(
+        /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/
+    );
 
+    if (!match) return "";
 
-    const match =
-        isoDuration.match(
-            /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/
-        );
+    const hours = Number(match[1] || 0);
+    const minutes = Number(match[2] || 0);
+    const seconds = Number(match[3] || 0);
 
-
-    if (!match) {
-        return "";
-    }
-
-
-    const hours =
-        Number(
-            match[1] || 0
-        );
-
-
-    const minutes =
-        Number(
-            match[2] || 0
-        );
-
-
-    const seconds =
-        Number(
-            match[3] || 0
-        );
-
-
-    if (
-        hours > 0
-    ) {
-
+    if (hours > 0) {
         return (
             `${hours}h ` +
-            `${String(
-                minutes
-            ).padStart(
-                2,
-                "0"
-            )}m`
+            `${String(minutes).padStart(2, "0")}m`
         );
     }
 
-
-    if (
-        minutes > 0
-    ) {
-
-        return (
-            seconds > 0
-                ? `${minutes}m ${String(
-                    seconds
-                ).padStart(
-                    2,
-                    "0"
-                )}s`
-                : `${minutes}m`
-        );
+    if (minutes > 0) {
+        return seconds > 0
+            ? `${minutes}m ${String(seconds).padStart(2, "0")}s`
+            : `${minutes}m`;
     }
-
 
     return `${seconds}s`;
 }
-
 
 /* =========================================
    MERGE VIDEO
    ========================================= */
 
-function mergeVideo(
-    newVideo
-) {
+function mergeVideo(newVideo) {
+    const existingIndex = videos.findIndex(
+        video => video.id === newVideo.id
+    );
 
-    const existingIndex =
-        videos.findIndex(
-            video =>
-                video.id ===
-                newVideo.id
-        );
-
-
-    if (
-        existingIndex ===
-        -1
-    ) {
-
-        videos.push(
-            newVideo
-        );
-
+    if (existingIndex === -1) {
+        videos.push({
+            ...newVideo,
+            isNew: true,
+            firstSeenAt:
+                newVideo.firstSeenAt ||
+                new Date().toISOString()
+        });
         return;
     }
 
+    const oldVideo = videos[existingIndex];
 
-    const oldVideo =
-        videos[
-            existingIndex
-        ];
-
-
-    videos[
-        existingIndex
-    ] = {
-
+    videos[existingIndex] = {
         ...oldVideo,
+        title: newVideo.title,
+        channel: newVideo.channel,
+        channelId: newVideo.channelId,
+        date: newVideo.date,
+        publishedAt: newVideo.publishedAt,
+        duration: newVideo.duration,
+        youtubeUrl: newVideo.youtubeUrl,
+        thumbnail: newVideo.thumbnail,
 
-        title:
-            newVideo.title,
-
-        channel:
-            newVideo.channel,
-
-        channelId:
-            newVideo.channelId,
-
-        date:
-            newVideo.date,
-
-        publishedAt:
-            newVideo.publishedAt,
-
-        duration:
-            newVideo.duration,
-
-        youtubeUrl:
-            newVideo.youtubeUrl,
-
-        thumbnail:
-            newVideo.thumbnail
-
+        // Preserve the user's existing NEW / watched state.
+        isNew: Boolean(oldVideo.isNew),
+        firstSeenAt:
+            oldVideo.firstSeenAt ||
+            newVideo.firstSeenAt ||
+            new Date().toISOString()
     };
 }
-
 
 /* =========================================
    REFRESH ALL CHANNELS
    ========================================= */
 
-async function refreshAllChannels(
-    silent = false
-) {
+async function refreshAllChannels(silent = false) {
+    if (refreshInProgress) return;
 
-    if (
-        refreshInProgress
-    ) {
-
-        return;
-    }
-
-
-    if (
-        channels.length === 0
-    ) {
-
+    if (channels.length === 0) {
         if (!silent) {
-
-            alert(
-                "There are no channels to refresh."
-            );
+            alert("There are no channels to refresh.");
         }
-
         return;
     }
 
-
-    if (
-        !getApiKey()
-    ) {
-
+    if (!getApiKey()) {
         if (!silent) {
-
-            alert(
-                "No YouTube API key has been saved."
-            );
+            alert("No YouTube API key has been saved.");
         }
-
         return;
     }
 
+    refreshInProgress = true;
+    updateRefreshButtons(true);
 
-    refreshInProgress =
-        true;
-
-
-    updateRefreshButtons(
-        true
-    );
-
-
-    let successfulChannels =
-        0;
-
-    let failedChannels =
-        0;
-
-    let totalVideos =
-        0;
-
+    let successfulChannels = 0;
+    let failedChannels = 0;
+    let totalVideos = 0;
+    let newVideosFound = 0;
 
     try {
-
-        for (
-            const channel
-            of channels
-        ) {
-
+        for (const channel of channels) {
             try {
-
                 const latestVideos =
-                    await loadVideosFromSavedChannel(
-                        channel
+                    await loadVideosFromSavedChannel(channel);
+
+                latestVideos.forEach(video => {
+                    const existed = videos.some(
+                        existing => existing.id === video.id
                     );
 
+                    mergeVideo(video);
 
-                latestVideos.forEach(
-                    video =>
-                        mergeVideo(
-                            video
-                        )
-                );
+                    if (!existed) {
+                        newVideosFound++;
+                    }
+                });
 
-
-                totalVideos +=
-                    latestVideos.length;
-
-
+                totalVideos += latestVideos.length;
                 successfulChannels++;
 
-
                 channel.lastUpdated =
-                    formatDateTime(
-                        new Date()
-                    );
+                    formatDateTime(new Date());
 
             } catch (error) {
-
                 console.log(
                     `Could not refresh ${channel.name}:`,
                     error
                 );
 
-
                 failedChannels++;
             }
-
         }
-
 
         sortVideos();
-
         saveVideos();
-
         saveChannels();
-
         saveLastRefreshTime();
-
-
         updateContent();
 
-
         if (!silent) {
-
             alert(
-
                 `Refresh complete.\n\n` +
-
                 `Channels updated: ${successfulChannels}\n` +
-
                 `Channels with errors: ${failedChannels}\n` +
-
-                `Videos received: ${totalVideos}`
-
+                `Videos received: ${totalVideos}\n` +
+                `New videos found: ${newVideosFound}`
             );
         }
-
     } finally {
-
-        refreshInProgress =
-            false;
-
-        updateRefreshButtons(
-            false
-        );
+        refreshInProgress = false;
+        updateRefreshButtons(false);
     }
 }
 
-
-/* =========================================
-   UPDATE REFRESH BUTTONS
-   ========================================= */
-
-function updateRefreshButtons(
-    refreshing
-) {
-
+function updateRefreshButtons(refreshing) {
     const pageButton =
-        document.getElementById(
-            "refresh-page-button"
-        );
-
+        document.getElementById("refresh-page-button");
 
     const channelsButton =
-        document.getElementById(
-            "refresh-all-channels-button"
-        );
-
+        document.getElementById("refresh-all-channels-button");
 
     if (pageButton) {
-
-        pageButton.disabled =
-            refreshing;
-
+        pageButton.disabled = refreshing;
         pageButton.textContent =
-            refreshing
-                ? "Refreshing..."
-                : "↻ Refresh";
+            refreshing ? "Refreshing..." : "↻ Refresh";
     }
 
-
     if (channelsButton) {
-
-        channelsButton.disabled =
-            refreshing;
-
+        channelsButton.disabled = refreshing;
         channelsButton.textContent =
             refreshing
                 ? "Refreshing..."
@@ -2692,924 +1191,502 @@ function updateRefreshButtons(
     }
 }
 
-
 /* =========================================
    AUTOMATIC REFRESH
    ========================================= */
 
 async function maybeAutoRefresh() {
+    if (channels.length === 0) return;
+    if (!getApiKey()) return;
 
-    if (
-        channels.length === 0
-    ) {
+    const lastRefresh = getLastRefreshTime();
+    const now = Date.now();
 
+    if (now - lastRefresh < AUTO_REFRESH_INTERVAL) {
         return;
     }
 
-
-    if (
-        !getApiKey()
-    ) {
-
-        return;
-    }
-
-
-    const lastRefresh =
-        getLastRefreshTime();
-
-
-    const now =
-        Date.now();
-
-
-    if (
-        now -
-        lastRefresh <
-        AUTO_REFRESH_INTERVAL
-    ) {
-
-        return;
-    }
-
-
-    await refreshAllChannels(
-        true
-    );
+    await refreshAllChannels(true);
 }
-
-
-/* =========================================
-   PERIODIC REFRESH
-   ========================================= */
 
 function startAutomaticRefresh() {
-
-    setInterval(
-        () => {
-
-            refreshAllChannels(
-                true
-            );
-
-        },
-        AUTO_REFRESH_INTERVAL
-    );
+    setInterval(() => {
+        refreshAllChannels(true);
+    }, AUTO_REFRESH_INTERVAL);
 }
-
 
 /* =========================================
    CHANNELS PAGE
    ========================================= */
 
 function renderChannelsPage() {
+    const videoList = document.querySelector(".video-list");
+    const sectionTitle = document.querySelector(".section-header h2");
 
-    const videoList =
-        document.querySelector(
-            ".video-list"
-        );
+    if (!videoList || !sectionTitle) return;
 
+    sectionTitle.textContent = "Channels";
 
-    const sectionTitle =
-        document.querySelector(
-            ".section-header h2"
-        );
+    document
+        .getElementById("refresh-page-button")
+        ?.remove();
 
-
-    if (
-        !videoList ||
-        !sectionTitle
-    ) {
-
-        return;
-    }
-
-
-    sectionTitle.textContent =
-        "Channels";
-
-
-    const refreshPageButton =
-        document.getElementById(
-            "refresh-page-button"
-        );
-
-
-    if (
-        refreshPageButton
-    ) {
-
-        refreshPageButton.remove();
-    }
-
-
-    if (
-        channels.length === 0
-    ) {
-
+    if (channels.length === 0) {
         videoList.innerHTML = `
-
             <div class="empty-state">
+                <div class="empty-icon">▣</div>
 
-                <div class="empty-icon">
-                    ▣
-                </div>
-
-                <h3>
-                    No channels yet
-                </h3>
+                <h3>No channels yet</h3>
 
                 <p>
-                    Add a YouTube channel
-                    to start following it.
+                    Add a YouTube channel to start following it.
                 </p>
 
-                <button
-                    class="add-channel-button"
-                    type="button"
-                >
+                <button class="add-channel-button"
+                        type="button">
                     + Add channel
                 </button>
-
             </div>
-
         `;
 
-
         setupAddChannelButton();
-
         updateNewVideoCount();
-
         return;
     }
 
-
     videoList.innerHTML = `
-
-        <button
-            class="add-channel-button"
-            type="button"
-        >
+        <button class="add-channel-button"
+                type="button">
             + Add channel
         </button>
 
-
-        <button
-            class="add-channel-button"
-            id="refresh-all-channels-button"
-            type="button"
-        >
+        <button class="add-channel-button"
+                id="refresh-all-channels-button"
+                type="button">
             ↻ Refresh All Channels
         </button>
 
-
         <div class="channel-last-refresh">
-
             ${
                 getLastRefreshText()
-                    ? escapeHtml(
-                        getLastRefreshText()
-                    )
+                    ? escapeHtml(getLastRefreshText())
                     : "Not refreshed yet"
             }
-
         </div>
-
 
         <div class="channel-list">
-
             ${channels
-                .map(
-                    channel =>
-                        createChannelCard(
-                            channel
-                        )
-                )
-                .join("")
-            }
-
+                .map(channel => createChannelCard(channel))
+                .join("")}
         </div>
-
     `;
 
-
     setupAddChannelButton();
-
     setupChannelButtons();
-
     setupRefreshAllChannelsButton();
-
     updateNewVideoCount();
 }
 
+function createChannelCard(channel) {
+    const thumbnail = channel.thumbnail
+        ? `
+            <img class="channel-thumbnail"
+                 src="${escapeHtml(channel.thumbnail)}"
+                 alt="">
+          `
+        : "";
 
-/* =========================================
-   CHANNEL CARD
-   ========================================= */
-
-function createChannelCard(
-    channel
-) {
-
-    const thumbnail =
-        channel.thumbnail
-            ? `
-
-                <img
-                    class="channel-thumbnail"
-                    src="${escapeHtml(
-                        channel.thumbnail
-                    )}"
-                    alt=""
-                >
-
-            `
-            : "";
-
-
-    const status =
-        channel.verified
-            ? "✓ Connected to YouTube"
-            : "Not connected";
-
+    const status = channel.verified
+        ? "✓ Connected to YouTube"
+        : "Not connected";
 
     return `
+        <article class="channel-card"
+                 data-channel-id="${escapeHtml(channel.id)}">
 
-        <article
-            class="channel-card"
-            data-channel-id="${escapeHtml(
-                channel.id
-            )}"
-        >
-
-            <div
-                class="channel-card-header"
-            >
-
+            <div class="channel-card-header">
                 ${thumbnail}
 
-
                 <div>
-
-                    <h3
-                        class="channel-card-name"
-                    >
-                        ${escapeHtml(
-                            channel.name
-                        )}
+                    <h3 class="channel-card-name">
+                        ${escapeHtml(channel.name)}
                     </h3>
 
-
-                    <p
-                        class="channel-card-url"
-                    >
-                        ${escapeHtml(
-                            status
-                        )}
+                    <p class="channel-card-url">
+                        ${escapeHtml(status)}
                     </p>
-
 
                     ${
                         channel.lastUpdated
                             ? `
-
-                                <p
-                                    class="channel-card-url"
-                                >
+                                <p class="channel-card-url">
                                     Checked:
                                     ${escapeHtml(
                                         channel.lastUpdated
                                     )}
                                 </p>
-
                               `
                             : ""
                     }
-
                 </div>
-
             </div>
 
-
-            <div
-                class="channel-card-actions"
-            >
-
-                <button
-                    class="channel-delete-button"
-                    type="button"
-                >
+            <div class="channel-card-actions">
+                <button class="channel-delete-button"
+                        type="button">
                     Delete channel
                 </button>
-
             </div>
-
         </article>
-
     `;
 }
 
-
-/* =========================================
-   ADD CHANNEL BUTTON
-   ========================================= */
-
 function setupAddChannelButton() {
-
-    const buttons =
-        document.querySelectorAll(
-            ".add-channel-button"
-        );
-
-
-    buttons.forEach(
-        button => {
-
+    document.querySelectorAll(".add-channel-button")
+        .forEach(button => {
             if (
                 button.id ===
                 "refresh-all-channels-button"
             ) {
-
                 return;
             }
-
 
             button.addEventListener(
                 "click",
                 showAddChannelForm
             );
-
-        }
-    );
+        });
 }
 
-
-/* =========================================
-   REFRESH ALL BUTTON
-   ========================================= */
-
 function setupRefreshAllChannelsButton() {
+    document
+        .getElementById("refresh-all-channels-button")
+        ?.addEventListener("click", () => {
+            refreshAllChannels(false);
+        });
+}
 
-    const button =
-        document.getElementById(
-            "refresh-all-channels-button"
-        );
+function setupChannelButtons() {
+    document.querySelectorAll(".channel-card")
+        .forEach(card => {
+            const channelId =
+                card.getAttribute("data-channel-id");
 
+            card.querySelector(".channel-delete-button")
+                ?.addEventListener("click", () => {
+                    deleteChannel(channelId);
+                });
+        });
+}
 
-    if (!button) {
+function deleteChannel(channelId) {
+    const channel = channels.find(
+        item => item.id === channelId
+    );
+
+    if (!channel) return;
+
+    if (
+        !confirm(
+            `Delete "${channel.name}" from your followed channels?`
+        )
+    ) {
         return;
     }
 
-
-    button.addEventListener(
-        "click",
-        () =>
-            refreshAllChannels(
-                false
-            )
+    channels = channels.filter(
+        item => item.id !== channelId
     );
-}
 
+    // Keep the video's history. Only the channel follow is removed.
+    saveChannels();
+    updateContent();
+}
 
 /* =========================================
    ADD CHANNEL FORM
    ========================================= */
 
 function showAddChannelForm() {
-
     const videoList =
-        document.querySelector(
-            ".video-list"
-        );
+        document.querySelector(".video-list");
 
+    if (!videoList) return;
 
-    if (!videoList) {
+    if (document.querySelector(".channel-form")) {
         return;
     }
 
+    const existingApiKey = getApiKey();
 
-    if (
-        document.querySelector(
-            ".channel-form"
-        )
-    ) {
+    const apiKeyHtml = existingApiKey
+        ? `
+            <p class="api-key-saved">
+                ✓ API key already saved
+            </p>
+          `
+        : `
+            <label>
+                YouTube API key
 
-        return;
-    }
+                <input type="password"
+                       id="youtube-api-key-input"
+                       placeholder="Paste your API key here"
+                       autocomplete="off">
+            </label>
+          `;
 
-
-    const existingApiKey =
-        getApiKey();
-
-
-    const apiKeyHtml =
-        existingApiKey
-            ? `
-
-                <p class="api-key-saved">
-                    ✓ API key already saved
-                </p>
-
-            `
-            : `
-
-                <label>
-
-                    YouTube API key
-
-                    <input
-                        type="password"
-                        id="youtube-api-key-input"
-                        placeholder="Paste your API key here"
-                        autocomplete="off"
-                    >
-
-                </label>
-
-            `;
-
-
-    const form =
-        document.createElement(
-            "div"
-        );
-
-
-    form.className =
-        "channel-form";
-
+    const form = document.createElement("div");
+    form.className = "channel-form";
 
     form.innerHTML = `
-
-        <h3>
-            Add YouTube Channel
-        </h3>
-
+        <h3>Add YouTube Channel</h3>
 
         <label>
-
             YouTube channel URL
 
-            <input
-                type="url"
-                id="channel-url-input"
-                placeholder="https://youtube.com/@channel"
-                autocomplete="off"
-            >
-
+            <input type="url"
+                   id="channel-url-input"
+                   placeholder="https://youtube.com/@channel"
+                   autocomplete="off">
         </label>
-
 
         ${apiKeyHtml}
 
-
-        <div
-            class="form-actions"
-        >
-
-            <button
-                class="form-button form-save-button"
-                id="save-channel-button"
-                type="button"
-            >
+        <div class="form-actions">
+            <button class="form-button form-save-button"
+                    id="save-channel-button"
+                    type="button">
                 Find channel
             </button>
 
-
-            <button
-                class="form-button form-cancel-button"
-                id="cancel-channel-button"
-                type="button"
-            >
+            <button class="form-button form-cancel-button"
+                    id="cancel-channel-button"
+                    type="button">
                 Cancel
             </button>
-
         </div>
-
     `;
 
+    videoList.prepend(form);
 
-    videoList.prepend(
-        form
-    );
-
-
-    const saveButton =
-        document.getElementById(
-            "save-channel-button"
-        );
-
-
-    const cancelButton =
-        document.getElementById(
-            "cancel-channel-button"
-        );
-
-
-    if (saveButton) {
-
-        saveButton.addEventListener(
+    document
+        .getElementById("save-channel-button")
+        ?.addEventListener(
             "click",
             connectYouTubeChannel
         );
-    }
 
-
-    if (cancelButton) {
-
-        cancelButton.addEventListener(
+    document
+        .getElementById("cancel-channel-button")
+        ?.addEventListener(
             "click",
-            () =>
-                updateContent()
+            updateContent
         );
-    }
 }
 
-
 /* =========================================
-   CONNECT YOUTUBE CHANNEL
+   CONNECT CHANNEL
    ========================================= */
 
 async function connectYouTubeChannel() {
-
     const urlInput =
-        document.getElementById(
-            "channel-url-input"
-        );
-
+        document.getElementById("channel-url-input");
 
     const apiKeyInput =
-        document.getElementById(
-            "youtube-api-key-input"
-        );
+        document.getElementById("youtube-api-key-input");
 
+    if (!urlInput) return;
 
-    if (!urlInput) {
-        return;
-    }
-
-
-    const url =
-        urlInput.value.trim();
-
+    const url = urlInput.value.trim();
 
     if (!url) {
-
-        alert(
-            "Please enter a YouTube channel URL."
-        );
-
+        alert("Please enter a YouTube channel URL.");
         return;
     }
 
-
-    const parsedUrl =
-        parseYouTubeChannelUrl(
-            url
-        );
-
+    const parsedUrl = parseYouTubeChannelUrl(url);
 
     if (!parsedUrl.valid) {
-
-        alert(
-            "Please enter a valid YouTube channel URL."
-        );
-
+        alert("Please enter a valid YouTube channel URL.");
         return;
     }
 
-
-    if (
-        !getApiKey() &&
-        apiKeyInput
-    ) {
-
-        const enteredKey =
-            apiKeyInput.value.trim();
-
+    if (!getApiKey() && apiKeyInput) {
+        const enteredKey = apiKeyInput.value.trim();
 
         if (!enteredKey) {
-
-            alert(
-                "Please enter your YouTube API key."
-            );
-
+            alert("Please enter your YouTube API key.");
             return;
         }
 
-
-        saveApiKey(
-            enteredKey
-        );
+        saveApiKey(enteredKey);
     }
-
 
     const button =
-        document.getElementById(
-            "save-channel-button"
-        );
-
+        document.getElementById("save-channel-button");
 
     if (button) {
-
-        button.disabled =
-            true;
-
-        button.textContent =
-            "Connecting...";
+        button.disabled = true;
+        button.textContent = "Connecting...";
     }
 
-
     try {
-
         const channel =
-            await findYouTubeChannel(
-                parsedUrl
-            );
-
+            await findYouTubeChannel(parsedUrl);
 
         const latestVideos =
-            await loadChannelVideos(
-                channel
-            );
+            await loadChannelVideos(channel);
 
-
-        const channelId =
-            channel.id;
-
+        const channelId = channel.id;
 
         const channelName =
-            channel
-                ?.snippet
-                ?.title ||
+            channel?.snippet?.title ||
             "YouTube Channel";
 
-
         const uploadsPlaylistId =
-            channel
-                ?.contentDetails
+            channel?.contentDetails
                 ?.relatedPlaylists
-                ?.uploads ||
-            "";
-
+                ?.uploads || "";
 
         const channelUrl =
             `https://www.youtube.com/channel/${channelId}`;
 
-
         const newChannel = {
-
-            id:
-                channelId,
-
-            name:
-                channelName,
-
-            url:
-                channelUrl,
-
-            originalUrl:
-                url,
-
-            uploadsPlaylistId:
-                uploadsPlaylistId,
-
+            id: channelId,
+            name: channelName,
+            url: channelUrl,
+            originalUrl: url,
+            uploadsPlaylistId,
             thumbnail:
-                channel
-                    ?.snippet
-                    ?.thumbnails
-                    ?.medium
-                    ?.url ||
-
-                channel
-                    ?.snippet
-                    ?.thumbnails
-                    ?.default
-                    ?.url ||
-
+                channel?.snippet?.thumbnails?.medium?.url ||
+                channel?.snippet?.thumbnails?.default?.url ||
                 "",
-
-            verified:
-                true,
-
-            addedAt:
-                new Date().toISOString(),
-
-            lastUpdated:
-                formatDateTime(
-                    new Date()
-                )
-
+            verified: true,
+            addedAt: new Date().toISOString(),
+            lastUpdated: formatDateTime(new Date())
         };
 
+        const existingIndex = channels.findIndex(
+            item => item.id === channelId
+        );
 
-        const existingIndex =
-            channels.findIndex(
-                item =>
-                    item.id ===
-                    channelId
-            );
-
-
-        if (
-            existingIndex >=
-            0
-        ) {
-
-            channels[
-                existingIndex
-            ] = {
-
-                ...channels[
-                    existingIndex
-                ],
-
+        if (existingIndex >= 0) {
+            channels[existingIndex] = {
+                ...channels[existingIndex],
                 ...newChannel
-
             };
-
         } else {
-
-            channels.push(
-                newChannel
-            );
+            channels.push(newChannel);
         }
-
 
         saveChannels();
 
+        let newVideosFound = 0;
 
-        latestVideos.forEach(
-            video =>
-                mergeVideo(
-                    video
-                )
-        );
+        latestVideos.forEach(video => {
+            const existed = videos.some(
+                existing => existing.id === video.id
+            );
 
+            mergeVideo(video);
+
+            if (!existed) newVideosFound++;
+        });
 
         sortVideos();
-
         saveVideos();
-
         saveLastRefreshTime();
 
-
-        currentPage =
-            "new";
-
-
+        currentPage = "new";
         saveCurrentPage();
 
         updateNavigation();
-
         updateContent();
 
-
         alert(
-
             `Connected to "${channelName}".\n\n` +
-
-            `${latestVideos.length} recent videos loaded.`
-
+            `${latestVideos.length} recent videos loaded.\n` +
+            `${newVideosFound} new videos added.`
         );
-
     } catch (error) {
-
         console.log(
             "Connect channel error:",
             error
         );
 
-
-        showYouTubeError(
-            error
-        );
-
+        showYouTubeError(error);
     } finally {
-
         if (button) {
-
-            button.disabled =
-                false;
-
-            button.textContent =
-                "Find channel";
+            button.disabled = false;
+            button.textContent = "Find channel";
         }
     }
 }
-
 
 /* =========================================
    ERROR MESSAGE
    ========================================= */
 
-function showYouTubeError(
-    error
-) {
-
-    if (
-        error.message ===
-        "NO_API_KEY"
-    ) {
-
-        alert(
-            "No YouTube API key has been saved."
-        );
-
+function showYouTubeError(error) {
+    if (error.message === "NO_API_KEY") {
+        alert("No YouTube API key has been saved.");
         return;
     }
 
-
-    if (
-        error.message ===
-        "CHANNEL_NOT_FOUND"
-    ) {
-
-        alert(
-            "The YouTube channel could not be found."
-        );
-
+    if (error.message === "CHANNEL_NOT_FOUND") {
+        alert("The YouTube channel could not be found.");
         return;
     }
 
-
-    if (
-        error.message ===
-        "quotaExceeded"
-    ) {
-
-        alert(
-            "The YouTube API daily quota has been exceeded."
-        );
-
+    if (error.message === "quotaExceeded") {
+        alert("The YouTube API daily quota has been exceeded.");
         return;
     }
 
-
-    if (
-        error.message ===
-        "keyInvalid"
-    ) {
-
+    if (error.message === "keyInvalid") {
         removeApiKey();
-
-
         alert(
             "The YouTube API key was invalid and has been removed."
         );
-
         return;
     }
 
-
-    if (
-        error.message ===
-        "forbidden"
-    ) {
-
+    if (error.message === "forbidden") {
         alert(
-            "YouTube rejected the API request. Please check the API key and YouTube Data API v3."
+            "YouTube rejected the API request. " +
+            "Please check the API key and YouTube Data API v3."
         );
-
         return;
     }
 
+    console.log("YouTube error:", error);
 
     alert(
         "Something went wrong while connecting to YouTube."
     );
 }
 
-
 /* =========================================
    START APPLICATION
    ========================================= */
 
 async function startApp() {
-
-    videos =
-        loadVideos();
-
-
-    channels =
-        loadChannels();
-
+    videos = loadVideos();
+    channels = loadChannels();
 
     sortVideos();
 
     setupNavigation();
-
     setupSettingsButton();
 
     updateNavigation();
-
     updateContent();
 
     startAutomaticRefresh();
 
     await maybeAutoRefresh();
 }
-
 
 /* =========================================
    START
