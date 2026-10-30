@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>My YouTube</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+<style>
+
+    /* Home dashboard: scoped additions, preserving the existing design. */
+    .home-hero { background:linear-gradient(135deg,#173867,#101827 72%); border:1px solid #28518b;
+        border-radius:18px; padding:22px 19px; }
+    .home-eyebrow { font-size:10px; font-weight:700; letter-spacing:1.2px; color:#93c5fd; }
+    .home-hero h3 {font-size:24px;line-height:1.18;margin:10px 0 8px;}
+    .home-hero p {font-size:14px;color:#cbd5e1;margin:0;}
+    .home-refresh-status {font-size:11px;color:#93c5fd;margin-top:16px;}
+    .home-stats {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+    .home-stat {min-width:0;text-align:left;padding:14px;background:#111827;color:#fff;
+        border:1px solid #283548;border-radius:15px;display:flex;flex-direction:column;gap:7px;cursor:pointer;}
+    .home-stat-top {font-size:13px;color:#cbd5e1;}
+    .home-stat strong {font-size:29px;line-height:1.15;font-variant-numeric:tabular-nums;}
+    .home-stat-open {font-size:11px;color:#93c5fd;}
+    .home-panel {padding:16px;background:#111827;border:1px solid #1f2937;border-radius:16px;}
+    .home-section-title {display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+    .home-section-title h3 {font-size:16px;margin:0;}
+    .home-mini-count {font-size:11px;color:#93c5fd;vertical-align:middle;}
+    .home-text-action {border:0;background:transparent;color:#93c5fd;font-weight:600;cursor:pointer;
+        white-space:nowrap;padding:4px;font-size:12px;}
+    .home-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+    .home-primary-action,.home-secondary-action {min-height:44px;padding:9px;border-radius:10px;
+        font-size:12px;font-weight:700;cursor:pointer;}
+    .home-primary-action {background:#2563eb;color:white;border:1px solid #2563eb;}
+    .home-secondary-action {background:#172033;color:#dbeafe;border:1px solid #334155;}
+    .home-primary-action:disabled {opacity:.5;cursor:not-allowed;}
+    .home-search-list {display:flex;flex-direction:column;gap:9px;}
+    .home-search-item {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;
+        width:100%;padding:12px;text-align:left;background:#0e192e;color:#fff;border:1px solid #334155;
+        border-radius:11px;cursor:pointer;min-width:0;}
+    .home-search-title {font-size:13px;font-weight:700;overflow-wrap:anywhere;grid-column:1;}
+    .home-search-meta {font-size:11px;color:#94a3b8;grid-column:1;overflow-wrap:anywhere;}
+    .home-search-run {font-size:12px;color:#93c5fd;grid-column:2;grid-row:1 / span 2;align-self:center;}
+    .home-empty {font-size:13px;color:#94a3b8;margin:0;}
+    .home-preview-videos {display:flex;flex-direction:column;gap:12px;min-width:0;}
+    .home-preview-videos .video-card {margin:0;}
+    .bottom-navigation .nav-button {min-width:0;font-size:10px;padding:5px 1px;}
+    .bottom-navigation .nav-button span:last-child {white-space:nowrap;}
+    .bottom-navigation .nav-icon {font-size:18px;}
+    @media (max-width:370px) {
+        .bottom-navigation .nav-button {font-size:9px;}
+        .bottom-navigation .nav-icon {font-size:17px;}
+        .home-hero h3 {font-size:21px;}
+    }
+
+
+    /* New / Saved / Watched: local library controls. Scoped to these tabs. */
+    .library-tools { padding:15px; background:#111827; border:1px solid #283548;
+        border-radius:16px; display:flex; flex-direction:column; gap:12px; min-width:0; }
+    .library-tools-heading h3 {margin:0 0 4px;font-size:17px;}
+    .library-tools-heading span {font-size:12px;color:#94a3b8;}
+    .library-tools label {display:flex;flex-direction:column;gap:6px;
+        font-size:12px;font-weight:600;color:#cbd5e1;min-width:0;}
+    .library-tools input,.library-tools select {width:100%;min-width:0;min-height:44px;
+        border:1px solid #334155;border-radius:10px;background:#0b1425;
+        color:#f8fafc;padding:10px;font-size:14px;}
+    .library-tools input:focus-visible,.library-tools select:focus-visible,
+    .library-tool-actions button:focus-visible {outline:2px solid #60a5fa;outline-offset:2px;}
+    .library-filter-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+    .library-tool-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+    .library-tool-actions button {min-height:42px;background:#172033;
+        color:#dbeafe;border:1px solid #334155;border-radius:10px;
+        font-weight:600;font-size:12px;padding:8px;cursor:pointer;}
+    .library-tool-actions button[aria-pressed="true"] {background:#173867;border-color:#60a5fa;}
+    #library-results-summary {margin:0;font-size:12px;color:#94a3b8;}
+    .library-results {display:flex;flex-direction:column;gap:14px;min-width:0;}
+    .library-section-heading {margin:8px 0 0;}
+    .library-section-heading h3 {font-size:17px;margin:0 0 3px;}
+    .library-section-heading h3 span {color:#93c5fd;font-size:13px;}
+    .library-section-heading p,.library-note {margin:0;color:#94a3b8;font-size:12px;}
+    /* Compact list removes only large thumbnails; title, link and controls remain. */
+    .library-results.is-compact .video-card .thumbnail {display:none;}
+    .library-results.is-compact .video-card .video-info {padding:12px;}
+    .library-results.is-compact .video-card .video-info h3 {font-size:15px;}
+    .library-results.is-compact .video-card .video-date {margin-bottom:6px;}
+    .library-results.is-compact .video-link-row {margin:6px 0 !important;}
+
+
+    /* Channels overview and per-channel video browsing. Scoped to Channels. */
+    .channels-overview {display:flex;flex-direction:column;gap:4px;padding:14px 15px;
+        background:#111827;border:1px solid #283548;border-radius:14px;}
+    .channels-overview strong {font-size:16px;color:#f8fafc;}
+    .channels-overview span {font-size:12px;color:#93c5fd;}
+    .channels-top-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+    .channels-top-actions .add-channel-button {min-width:0;min-height:44px;white-space:normal;
+        padding:10px 6px;font-size:12px;}
+    .channel-card-expanded {min-width:0;background:#111827;color:#f8fafc;}
+    .channel-card-expanded .channel-card-header {min-width:0;}
+    .channel-card-expanded .channel-card-info {min-width:0;overflow-wrap:anywhere;}
+    .channel-stats {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;
+        padding:12px 0;border-top:1px solid #273548;border-bottom:1px solid #273548;}
+    .channel-stats div {display:flex;align-items:center;flex-direction:column;gap:3px;min-width:0;}
+    .channel-stats strong {font-size:20px;line-height:1.2;color:#f8fafc;font-variant-numeric:tabular-nums;}
+    .channel-stats span {font-size:11px;color:#94a3b8;}
+    .channel-card-buttons {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+    .channel-card-buttons button {min-width:0;min-height:44px;box-sizing:border-box;white-space:normal;
+        border-radius:10px;padding:9px 7px;font-size:12px;font-weight:700;cursor:pointer;}
+    .channel-card-buttons .channel-view-button {background:#2563eb;color:#fff;border:1px solid #2563eb;}
+    .channel-card-buttons .channel-delete-button {background:#172033;color:#cbd5e1;
+        border:1px solid #334155;}
+    .channel-detail {display:flex;flex-direction:column;gap:13px;min-width:0;padding:15px;
+        background:#111827;border:1px solid #283548;border-radius:16px;}
+    .channel-back-button {min-height:44px;align-self:flex-start;border:1px solid #334155;
+        background:#172033;color:#dbeafe;border-radius:10px;padding:10px 14px;
+        font-weight:700;cursor:pointer;}
+    .channel-detail-heading {display:flex;align-items:center;gap:12px;min-width:0;}
+    .channel-detail-thumbnail {width:54px;height:54px;flex:0 0 54px;border-radius:50%;object-fit:cover;}
+    .channel-detail-heading-text {min-width:0;overflow-wrap:anywhere;}
+    .channel-detail-heading h3 {margin:0 0 5px;font-size:18px;}
+    .channel-detail-heading p {margin:0;font-size:12px;color:#94a3b8;}
+    .channel-detail-filters {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+    .channel-filter-button {min-height:42px;border-radius:10px;border:1px solid #334155;
+        background:#172033;color:#dbeafe;padding:9px 6px;cursor:pointer;font-size:12px;
+        font-weight:700;min-width:0;}
+    .channel-filter-button span {color:#93c5fd;margin-left:4px;}
+    .channel-filter-button.is-selected {background:#173867;border-color:#60a5fa;}
+    .channel-detail-note,.channel-detail-summary {font-size:12px;color:#94a3b8;margin:0;}
+    .channel-detail-videos {display:flex;flex-direction:column;gap:14px;min-width:0;}
+    .channel-back-button:focus-visible,.channel-card-buttons button:focus-visible,
+    .channel-filter-button:focus-visible {outline:2px solid #60a5fa;outline-offset:2px;}
+
+
+
+    /* Settings hub: clearer organisation and accessible mobile controls.
+       Scoped to the settings dialog; existing video/library styles are unchanged. */
+    .settings-overlay {box-sizing:border-box;padding:12px;}
+    .settings-hub {box-sizing:border-box;width:100%;max-width:520px;
+        max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;
+        scrollbar-width:thin;}
+    .settings-hub .settings-header {position:sticky;top:0;z-index:2;
+        background:#111827;padding:16px;border-bottom:1px solid #283548;}
+    .settings-hub .settings-header h2 {margin:0 0 4px;}
+    .settings-hub .settings-hub-body {display:flex;flex-direction:column;gap:12px;
+        padding:15px;min-width:0;}
+    .settings-overview {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+    .settings-overview div {display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:4px;padding:11px 2px;min-width:0;border-radius:12px;
+        background:#172033;border:1px solid #334155;}
+    .settings-overview strong {font-size:22px;color:#f8fafc;font-variant-numeric:tabular-nums;}
+    .settings-overview span {font-size:10px;color:#cbd5e1;}
+    .settings-group {border-radius:13px;border:1px solid #334155;overflow:hidden;
+        background:#111827;min-width:0;}
+    .settings-group > summary {list-style:none;display:flex;align-items:center;
+        justify-content:space-between;gap:9px;padding:16px 13px;min-height:52px;
+        font-weight:700;color:#f8fafc;cursor:pointer;font-size:14px;}
+    .settings-group > summary::-webkit-details-marker {display:none;}
+    .settings-group[open] > summary {border-bottom:1px solid #334155;color:#bfdbfe;}
+    .settings-group-arrow {color:#94a3b8;font-size:18px;transition:transform .15s;}
+    .settings-group[open] .settings-group-arrow {transform:rotate(180deg);}
+    .settings-group-content {padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0;}
+    .settings-group-content > h3 {margin:0;font-size:15px;color:#e2e8f0;}
+    .settings-group-content .settings-description {margin:0;line-height:1.5;
+        overflow-wrap:anywhere;}
+    .settings-group-content .settings-action-button,
+    .settings-group-content .settings-danger-button {box-sizing:border-box;
+        min-height:44px;width:100%;margin:0;white-space:normal;}
+    .settings-group-content button:disabled {opacity:.5;cursor:not-allowed;}
+    .settings-button-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+    .settings-button-grid > :only-child {grid-column:span 2;}
+    .settings-backup-option {display:flex;align-items:flex-start;gap:10px;
+        color:#e2e8f0;font-size:13px;cursor:pointer;line-height:1.4;}
+    .settings-backup-option input {width:18px;height:18px;flex:0 0 18px;margin-top:1px;}
+    .settings-backup-option small {display:block;color:#94a3b8;font-size:11px;}
+    .settings-hub-divider {width:100%;border:0;border-top:1px solid #334155;margin:2px 0;}
+    .settings-hub-note {font-size:12px;line-height:1.5;color:#94a3b8;margin:2px 0;}
+    .settings-hub .settings-footer {position:sticky;bottom:0;background:#111827;
+        padding:12px 15px;border-top:1px solid #283548;}
+    .settings-hub button:focus-visible,.settings-hub summary:focus-visible,
+    .settings-hub input:focus-visible {outline:2px solid #60a5fa;outline-offset:2px;}
+    @media(max-width:370px) {
+        .settings-overview strong {font-size:19px;}
+        .settings-overview span {font-size:9px;}
+        .settings-button-grid {grid-template-columns:1fr;}
+        .settings-button-grid > :only-child {grid-column:span 1;}
+    }
+
+
+
+    /* ================================================
+       MY YOUTUBE — UNIFIED MOBILE DESIGN / OCT 2026
+       Presentation only. No application logic changed.
+       ================================================ */
+    :root {
+        --ui-bg: #0b1120;
+        --ui-surface: #111c2e;
+        --ui-border: #2b3d53;
+        --ui-muted: #a5b4c9;
+        --ui-blue: #60a5fa;
+        --ui-blue-strong: #2563eb;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.48;
+        -webkit-font-smoothing: antialiased;
+        padding-bottom: calc(92px + env(safe-area-inset-bottom));
+    }
+    .app-header {
+        padding: 13px max(16px, env(safe-area-inset-left));
+        background: rgba(17, 24, 39, .96);
+        border-bottom: 1px solid #2a3b52;
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, .12);
+    }
+    .app-header h1 {
+        font-size: 19px;
+        letter-spacing: 1.15px;
+        line-height: 1.2;
+    }
+    .app-header p {font-size: 12px; margin-top: 3px; color: var(--ui-muted);}
+    .settings-button {
+        min-width: 44px; min-height: 44px;
+        border: 1px solid #3b5270;
+        border-radius: 13px;
+        background: #19263b;
+        color: #dbeafe;
+    }
+    .app-content {padding: 19px 15px 30px;}
+    .section-header {align-items:flex-start; margin-bottom:16px; gap:12px;}
+    .section-header h2 {font-size:22px; line-height:1.25; letter-spacing:-.3px;}
+    .video-count {font-weight:650;}
+
+    /* Consistent card surfaces on all pages. */
+    .video-card, .channel-card, .empty-state, .channel-form,
+    .home-panel, .library-tools, .channel-detail, .channels-overview {
+        border-color: var(--ui-border);
+        border-radius: 17px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    }
+    .video-card {overflow:hidden; background:var(--ui-surface);}
+    .video-info {padding:16px; min-width:0;}
+    .video-info h3 {font-size:16px; line-height:1.4; margin-bottom:8px; overflow-wrap:anywhere;}
+    .channel-name {font-size:13px;}
+    .video-date {color:var(--ui-muted); font-size:12px; margin-bottom:13px;}
+    .thumbnail {background:#172033;}
+    .video-list, .library-results, .channel-list, .channel-detail-videos {gap:15px;}
+    .video-link-row {padding:10px 11px; background:#0d1728; border:1px solid #28394f; border-radius:12px;}
+    .video-link-row a {line-height:1.5;}
+    .video-actions {gap:9px;}
+    .action-button, .refresh-button, .add-channel-button,
+    .channel-filter-button, .form-button, .home-primary-action, .home-secondary-action {
+        min-height:44px;
+        border-radius:11px;
+        font-family:inherit;
+        font-weight:650;
+    }
+    .action-button {font-size:12px; padding:9px 6px;}
+    .watch-button, .form-save-button, .add-channel-button,
+    .home-primary-action, .channel-card-buttons .channel-view-button {
+        background:#2764d9; border-color:#3b82f6; color:white;
+    }
+    .watch-button:active, .form-save-button:active,
+    .home-primary-action:active {background:#1d4ed8;}
+    .empty-state {padding:36px 20px;}
+    .empty-state p {line-height:1.55;}
+
+    /* Cards and controls from newer sections use the same rhythm. */
+    .home-hero {padding:23px 19px; border-radius:19px;}
+    .home-hero h3 {letter-spacing:-.5px;}
+    .home-stat {border-radius:15px; border-color:#344967; background:var(--ui-surface);}
+    .home-stat strong {letter-spacing:-.6px;}
+    .home-stat-open, .home-search-run, .home-text-action {color:#a6cfff;}
+    .home-panel, .library-tools, .channel-detail, .channels-overview {background:var(--ui-surface);}
+    .library-tools {gap:13px;}
+    .library-tools input, .library-tools select, .channel-form input {
+        background:#0e192c;
+        border:1px solid #40536c;
+        border-radius:11px;
+        color:#f8fafc;
+        font-size:14px;
+    }
+    .library-filter-grid {gap:9px;}
+    .channel-card-expanded {background:var(--ui-surface);}
+    .channel-card-buttons, .channels-top-actions {gap:10px;}
+    .channel-stats {border-color:#2c3f55;}
+    .channel-stats strong {font-variant-numeric:tabular-nums;}
+
+    /* Form controls and input focus across both static and JS-generated UI. */
+    button, input, select, textarea {font-family:inherit;}
+    input, select, textarea {max-width:100%;}
+    button {touch-action:manipulation;}
+    button:disabled {opacity:.55;cursor:not-allowed;}
+    :where(button, a, input, select, textarea, summary):focus-visible {
+        outline:3px solid #93c5fd !important;
+        outline-offset:3px;
+    }
+
+    /* Fixed six-tab bar, safe area and clear selected state. */
+    .bottom-navigation {
+        min-height:73px;
+        padding:5px 4px calc(6px + env(safe-area-inset-bottom));
+        background:rgba(15,23,42,.98);
+        border-top:1px solid #334155;
+        box-shadow:0 -8px 28px rgba(0,0,0,.25);
+        backdrop-filter:blur(16px);
+        -webkit-backdrop-filter:blur(16px);
+    }
+    .bottom-navigation .nav-button {
+        min-height:56px;
+        padding:7px 1px;
+        border-radius:12px;
+        gap:5px;
+        color:#a6b5ca;
+        font-size:10px;
+        transition:background-color .14s ease, color .14s ease;
+    }
+    .bottom-navigation .nav-icon {font-size:19px; line-height:1.1;}
+    .bottom-navigation .nav-button.active {
+        background:rgba(37,99,235,.2);
+        color:#bfdbfe;
+    }
+    .bottom-navigation .nav-button.active .nav-icon {color:#93c5fd;}
+    .bottom-navigation .nav-button:active {background:rgba(96,165,250,.16);}
+
+    /* Settings: consistent border and contrast with the rest of the app. */
+    .settings-hub {border-color:#3c5069;}
+    .settings-group {border-color:var(--ui-border);}
+    .settings-group > summary {font-size:14px;}
+    .settings-overview div {border-color:#3b4d63;}
+
+    @media (hover:hover) and (pointer:fine) {
+        .home-stat:hover,.home-search-item:hover,.channel-view-button:hover,
+        .settings-button:hover,.action-button:hover,.nav-button:hover {
+            border-color:#5280bd;
+        }
+    }
+    @media (max-width:370px) {
+        .app-content {padding-left:11px; padding-right:11px;}
+        .bottom-navigation {padding-left:2px;padding-right:2px;}
+        .bottom-navigation .nav-button {font-size:9px; gap:4px; padding-left:0;padding-right:0;}
+        .bottom-navigation .nav-icon {font-size:18px;}
+        .video-info {padding:13px;}
+        .video-actions {gap:6px;}
+        .action-button {font-size:11px;}
+    }
+    @media (min-width:600px) {
+        .app-header {padding:17px 24px;}
+        .app-content {padding:24px 22px 40px;}
+        .video-card {align-items:stretch;}
+        .thumbnail {align-self:stretch;}
+    }
+    @media (prefers-reduced-motion:reduce) {
+        html {scroll-behavior:auto;}
+        .bottom-navigation .nav-button {transition:none;}
+    }
+
+    /* Hidden videos: a discreet action on every card, and safe restoration in Settings. */
+    .video-hide-row {margin-top:8px; display:flex; justify-content:flex-end;}
+    .video-hide-button {font-size:12px; color:#cbd5e1; background:#1c293b;
+        border:1px solid #3b4b63; border-radius:10px; min-height:40px; padding:8px 14px;}
+    .video-hide-button:hover {background:#283b53;}
+    .settings-hidden-list {display:flex; flex-direction:column; gap:10px; min-width:0;}
+    .settings-hidden-item {display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+        gap:10px; min-width:0; border:1px solid #334155; background:#0e192b;
+        border-radius:12px; padding:12px;}
+    .settings-hidden-info {flex:1 1 160px; min-width:0; display:flex; flex-direction:column; gap:4px;}
+    .settings-hidden-info strong {font-size:13px; overflow-wrap:anywhere; color:#f1f5f9;}
+    .settings-hidden-info span {font-size:12px; color:#94a3b8; overflow-wrap:anywhere;}
+    .settings-group-content .settings-restore-video {width:auto; flex:0 0 auto; min-width:100px; min-height:40px;}
+    @media(max-width:370px) {.settings-restore-video{width:100%;}}
+
+    /* Home & App Polish (October 2026): presentation only; all video data is untouched. */
+    :root { --home-accent:#77b3ff; --home-elevated:#121e30; --home-outline:#31445f; }
+    .home-hero-v2 {
+        position:relative; overflow:hidden; padding:26px 20px 21px;
+        background:radial-gradient(circle at 100% 0,rgba(75,146,245,.24),transparent 53%),
+          linear-gradient(140deg,#18365e,#101a2b 80%);
+        border:1px solid #41658f; box-shadow:0 12px 30px rgba(0,0,0,.14);
+    }
+    .home-hero-v2::before {content:"";position:absolute;top:-55px;right:-45px;
+        width:160px;height:160px;border:1px solid rgba(148,197,255,.2);border-radius:50%;pointer-events:none;}
+    .home-hero-v2 h3 {color:#f8fafc;position:relative;font-size:clamp(23px,6.2vw,30px);letter-spacing:-.6px;margin:12px 0 9px;}
+    .home-hero-v2 p {max-width:36ch;line-height:1.5;position:relative;}
+    .home-status-line {display:flex;align-items:center;gap:9px;min-width:0;
+        color:#c3dcff;font-size:11px;margin-top:19px;line-height:1.5;}
+    .home-status-dot {display:inline-block;width:8px;height:8px;background:#60a5fa;
+        border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 4px rgba(96,165,250,.15);}
+    .home-stats-v2 {gap:10px;}
+    .home-stat-v2 {padding:15px 14px;min-height:128px;gap:7px;box-sizing:border-box;
+        border-color:var(--home-outline);background:linear-gradient(155deg,#17243a,#111b2a);}
+    .home-stat-v2 .home-stat-top {font-weight:700;display:flex;align-items:center;gap:7px;color:#dbeafe;}
+    .home-stat-symbol {color:#89c0ff;font-size:19px;line-height:1;}
+    .home-stat-v2 strong {font-size:32px;letter-spacing:-.6px;}
+    .home-stat-description {font-size:11px;color:#94a3b8;line-height:1.3;}
+    .home-panel {border-color:var(--home-outline);background:var(--home-elevated);box-shadow:0 6px 22px rgba(0,0,0,.10);}
+    .home-section-title h3 {color:#f8fafc;font-size:17px;letter-spacing:-.2px;}
+    .home-text-action {min-height:38px;display:inline-flex;align-items:center;justify-content:center;}
+    .home-actions-v2 {grid-template-columns:repeat(2,minmax(0,1fr));}
+    .home-actions-v2 > :last-child {grid-column:span 2;}
+    .home-actions-v2 button {box-sizing:border-box;min-width:0;min-height:46px;
+        font-size:13px;white-space:normal;padding:10px 9px;}
+    .home-quick-videos,.home-channel-list {display:flex;flex-direction:column;gap:10px;min-width:0;}
+    .home-quick-video {display:flex;gap:11px;padding:10px;border:1px solid #31445f;
+        border-radius:13px;background:#0e1a2b;min-width:0;}
+    .home-quick-thumb {width:96px;height:76px;flex:0 0 96px;border-radius:9px;
+        overflow:hidden;background:#243550;display:flex;align-items:center;justify-content:center;}
+    .home-quick-thumb img {width:100%;height:100%;object-fit:cover;}
+    .home-quick-placeholder {font-size:21px;color:#bfdbfe;}
+    .home-quick-details {display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;}
+    .home-quick-title {font-size:13px;line-height:1.35;font-weight:700;color:#f1f5f9;
+        overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .home-quick-meta {font-size:11px;color:#a6b7cb;overflow-wrap:anywhere;line-height:1.35;}
+    .home-inline-action {display:inline-flex;align-items:center;align-self:flex-start;
+        min-height:30px;padding:2px 0;color:#93c5fd;font-size:12px;font-weight:700;text-decoration:none;}
+    .home-channel-item {display:flex;align-items:center;gap:10px;text-align:left;width:100%;
+        min-width:0;min-height:66px;background:#0e1a2b;border:1px solid #31445f;
+        padding:10px;border-radius:13px;color:#f8fafc;cursor:pointer;}
+    .home-channel-item img,.home-channel-icon {width:42px;height:42px;flex:0 0 42px;
+        border-radius:50%;object-fit:cover;background:#203653;}
+    .home-channel-icon {display:flex;align-items:center;justify-content:center;color:#a3cafa;}
+    .home-channel-text {min-width:0;flex:1;display:flex;flex-direction:column;gap:3px;}
+    .home-channel-text strong {font-size:13px;overflow-wrap:anywhere;line-height:1.3;}
+    .home-channel-text > span {color:#94a3b8;font-size:11px;}
+    .home-channel-count {font-size:11px;color:#cbd5e1;border:1px solid #384b63;
+        border-radius:999px;padding:6px 8px;white-space:nowrap;}
+    .home-channel-count.has-new {background:rgba(37,99,235,.18);border-color:#4a87dd;color:#bfdbfe;}
+    .home-empty-guidance {display:flex;flex-direction:column;align-items:flex-start;gap:6px;}
+    .home-preview-videos .video-card {box-shadow:none;}
+    .home-preview-videos .video-info h3 {color:#f8fafc;}
+    /* Shared mobile polish: more reliable tap targets, contrast and keyboard focus. */
+    .home-stat,.home-channel-item,.home-search-item,.home-actions button,
+    .home-text-action,.video-card .action-button,.bottom-navigation .nav-button,
+    .settings-button {touch-action:manipulation;}
+    .home-stat:focus-visible,.home-channel-item:focus-visible,.home-search-item:focus-visible,
+    .home-actions button:focus-visible,.home-inline-action:focus-visible,
+    .home-text-action:focus-visible,.bottom-navigation button:focus-visible,
+    .video-card button:focus-visible {outline:2px solid #93c5fd;outline-offset:3px;}
+    .home-quick-video a:focus-visible {outline:2px solid #93c5fd;outline-offset:2px;}
+    .bottom-navigation {padding-bottom:max(8px,env(safe-area-inset-bottom,0px));}
+    .bottom-navigation .nav-button {border-radius:13px;min-height:52px;}
+    .video-card {border-radius:16px;}
+    .video-info h3 {line-height:1.35;overflow-wrap:anywhere;}
+    @media (max-width:370px) {
+        .home-quick-thumb {width:74px;height:72px;flex-basis:74px;}
+        .home-quick-video {gap:9px;padding:8px;}
+        .home-hero-v2 {padding:22px 16px;}
+        .home-stat-v2 {padding:12px 10px;}
+        .home-channel-item {gap:8px;}
+    }
+    @media (min-width:750px) {
+        .home-quick-thumb {width:128px;height:86px;flex-basis:128px;}
+        .home-hero-v2 {padding:29px;}
+        .home-panel {padding:20px;}
+    }
+    @media (prefers-reduced-motion:reduce) {
+        .home-channel-item,.home-stat,.home-search-item {transition:none;}
+    }
+</style>
+
+</head>
+
+
+<body>
+
+
+    <!-- =====================================
+         HEADER
+         ===================================== -->
+
+    <header class="app-header">
+
+        <div>
+
+            <h1>MY YOUTUBE</h1>
+            <p>
+                Your personal video space
+            </p>
+
+        </div>
+
+
+        <button
+            class="settings-button"
+            type="button"
+            aria-label="Settings"
+        >
+            ⚙
+        </button>
+
+    </header>
+
+
+
+    <!-- =====================================
+         MAIN CONTENT
+         ===================================== -->
+
+    <main class="app-content">
+
+
+        <!-- Section title -->
+
+        <section class="section-header">
+            <div>
+
+                <h2>New Videos</h2>
+
+                <span class="video-count">
+                    2 new
+                </span>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- =====================================
+             VIDEO LIST
+             ===================================== -->
+
+        <section class="video-list"></section>
+
+
+    </main>
+    <!-- =====================================
+         BOTTOM NAVIGATION
+         ===================================== -->
+
+    <nav class="bottom-navigation">
+
+
+        <button
+            class="nav-button active"
+            type="button"
+        >
+
+            <span class="nav-icon">
+                ●
+            </span>
+
+            <span>
+                New
+            </span>
+
+        </button>
+
+
+
+        <button
+            class="nav-button"
+            type="button"
+        >
+            <span class="nav-icon">
+                ☆
+            </span>
+
+            <span>
+                Saved
+            </span>
+
+        </button>
+
+
+
+        <button
+            class="nav-button"
+            type="button"
+        >
+
+            <span class="nav-icon">
+                ✓
+            </span>
+
+            <span>
+                Watched
+            </span>
+
+        </button>
+
+
+
+        <button
+            class="nav-button"
+            type="button"
+        >
+            <span class="nav-icon">
+                ▣
+            </span>
+
+            <span>
+                Channels
+            </span>
+
+        </button>
+
+
+    </nav>
+
+
+
+    <!-- =====================================
+         JAVASCRIPT
+         ===================================== -->
+
+    <script src="app.js?v=20261030-home-overview-v2"></script>
+
+
+</body>
+
+</html>
