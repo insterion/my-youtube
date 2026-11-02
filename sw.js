@@ -1,8 +1,11 @@
-/* My YouTube PWA 1.3 — GitHub Pages compatible offline shell.
-   Only app files are stored in Cache Storage. YouTube videos and API responses are not cached. */
-const CACHE_NAME = 'my-youtube-shell-20261102-maintenance-v6';
+/* My YouTube PWA 1.3.8 — resilient offline navigation.
+   Only fixed app assets are cached. YouTube videos and API responses are never cached.
+   Keep Share Receiver navigation working offline, including Android Share query parameters. */
+const CACHE_NAME = 'my-youtube-shell-20261102-offline-v7';
 const BASE = new URL(self.registration.scope);
 const OFFLINE_PAGE = new URL('index.html', BASE).href;
+const SHARE_PAGE = new URL('share.html', BASE).href;
+const NAVIGATION_TIMEOUT_MS = 12000;
 const SHELL = [
   './',
   './index.html',
@@ -42,6 +45,13 @@ self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
+function unavailableResponse() {
+  return new Response(
+    'This My YouTube page is not available offline. Reconnect and try again.',
+    { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+  );
+}
+
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -49,19 +59,36 @@ self.addEventListener('fetch', event => {
   if (url.origin !== BASE.origin || !url.pathname.startsWith(BASE.pathname)) return;
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), NAVIGATION_TIMEOUT_MS);
       try {
-        // Prevent cached share URLs with private data or old HTML.
-        const response = await fetch(request);
-        if (response.ok && url.search === '' && (url.pathname === BASE.pathname || url.pathname.endsWith('/index.html'))) {
+        // Network-first: always prefer the current published page when reachable.
+        const response = await fetch(request, { signal: controller.signal });
+        if (response.ok && url.search === '' &&
+            (url.pathname === BASE.pathname || url.pathname === new URL('index.html', BASE).pathname)) {
           const cache = await caches.open(CACHE_NAME);
-          await cache.put(OFFLINE_PAGE, response.clone());
+          // Cache only the canonical Home HTML, never URLs containing shared links.
+          try { await cache.put(OFFLINE_PAGE, response.clone()); }
+          catch (error) { console.warn('Could not refresh the offline Home page:', error); }
         }
         return response;
       } catch (error) {
         const cache = await caches.open(CACHE_NAME);
-        return (await cache.match(request)) || (await cache.match(OFFLINE_PAGE)) || (await cache.match(BASE.href)) ||
-          new Response('My YouTube is not yet available offline. Open it once while online.',
-            {status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});
+        // Android Share targets often include ?title=&text=&url=. Match the
+        // cached receiver by PATH, preserving the original URL's query for JS.
+        if (url.pathname === new URL('share.html', BASE).pathname) {
+          return (await cache.match(SHARE_PAGE)) || unavailableResponse();
+        }
+        // Only the Home entry points may fall back to the app shell. Serving
+        // index.html for Diagnostics or a missing URL would be misleading.
+        if (url.pathname === BASE.pathname ||
+            url.pathname === new URL('index.html', BASE).pathname) {
+          return (await cache.match(OFFLINE_PAGE)) ||
+            (await cache.match(BASE.href)) || unavailableResponse();
+        }
+        return (await cache.match(request, { ignoreSearch: true })) || unavailableResponse();
+      } finally {
+        clearTimeout(timeout);
       }
     })());
     return;
