@@ -1,6 +1,6 @@
 /* My YouTube PWA 1.3 — GitHub Pages compatible offline shell.
    Only app files are stored in Cache Storage. YouTube videos and API responses are not cached. */
-const CACHE_NAME = 'my-youtube-shell-20261102-maintenance-v5';
+const CACHE_NAME = 'my-youtube-shell-20261102-maintenance-v6';
 const BASE = new URL(self.registration.scope);
 const OFFLINE_PAGE = new URL('index.html', BASE).href;
 const SHELL = [
@@ -8,12 +8,13 @@ const SHELL = [
   './index.html',
   './share.html',
   './style.css',
-  './youtube-utils.js?v=20261102-maintenance-1-3-5',
-  './youtube-api.js?v=20261102-maintenance-1-3-5',
-  './library-storage.js?v=20261102-maintenance-1-3-5',
-  './backup-manager.js?v=20261102-maintenance-1-3-5',
-  './app.js?v=20261102-maintenance-1-3-5',
-  './pwa.js?v=20261102-maintenance-1-3-5',
+  './youtube-utils.js?v=20261102-maintenance-1-3-6',
+  './youtube-api.js?v=20261102-maintenance-1-3-6',
+  './library-storage.js?v=20261102-maintenance-1-3-6',
+  './backup-manager.js?v=20261102-maintenance-1-3-6',
+  './ui-navigation.js?v=20261102-maintenance-1-3-6',
+  './app.js?v=20261102-maintenance-1-3-6',
+  './pwa.js?v=20261102-maintenance-1-3-6',
   './manifest.webmanifest?v=20261102-pwa2',
   './icon-192.png',
   './icon-512.png'
