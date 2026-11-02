@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Maintenance release 1.3.6 (2026-11-02)
+   Feature release 1.4.0 (2026-11-02)
    Helpers in youtube-utils.js; API in youtube-api.js; storage in library-storage.js; backup in backup-manager.js; UI in ui-navigation.js.
    Preserves existing storage keys and app features.
 
@@ -872,6 +872,66 @@ function removeStoredApiKey() {
    Ordered videos already in the library. No YouTube account sign-in needed.
    ========================================= */
 
+// Watch Queue display preferences do not modify video data or saved manual order.
+const QUEUE_VIEW_KEY = "my-youtube-queue-view-v1";
+const QUEUE_SORT_MODES = ["manual", "newest", "oldest", "longest", "shortest"];
+let queueSortMode = loadQueueSortMode();
+let queueFilterQuery = "";
+
+function loadQueueSortMode() {
+    try {
+        const value = localStorage.getItem(QUEUE_VIEW_KEY);
+        return QUEUE_SORT_MODES.includes(value) ? value : "manual";
+    } catch (error) { return "manual"; }
+}
+function setQueueSortMode(value) {
+    queueSortMode = QUEUE_SORT_MODES.includes(value) ? value : "manual";
+    try { localStorage.setItem(QUEUE_VIEW_KEY, queueSortMode); }
+    catch (error) { console.warn("Could not save Queue view setting", error); }
+}
+function queueDisplayItems() {
+    const query = queueFilterQuery.trim().toLocaleLowerCase();
+    // Index once; avoids repeated full-library scans for long queues on Android.
+    const byId = new Map(videos.map(video => [video.id, video]));
+    const items = watchQueue.map((id, index) => ({
+        video: byId.get(id),
+        position: index
+    })).filter(item => item.video && !item.video.hidden &&
+        (!query || [item.video.title, item.video.channel].some(value =>
+            String(value || "").toLocaleLowerCase().includes(query))));
+    if (queueSortMode === "manual") return items;
+    return items.sort((a, b) => {
+        const aDate = Date.parse(a.video.publishedAt || "");
+        const bDate = Date.parse(b.video.publishedAt || "");
+        const timeA = Number.isFinite(aDate) ? aDate : 0;
+        const timeB = Number.isFinite(bDate) ? bDate : 0;
+        if (queueSortMode === "newest") return (timeB - timeA) || (a.position - b.position);
+        if (queueSortMode === "oldest") return (timeA - timeB) || (a.position - b.position);
+        const secsA = durationSecondsForSorting(a.video.duration);
+        const secsB = durationSecondsForSorting(b.video.duration);
+        if (secsA === null && secsB !== null) return 1;
+        if (secsB === null && secsA !== null) return -1;
+        const delta = (secsA || 0) - (secsB || 0);
+        return (queueSortMode === "longest" ? -delta : delta) ||
+            (a.position - b.position);
+    });
+}
+
+function playQueueVideoNext(videoId) {
+    if (!canModifyLibrary() || !isQueued(videoId)) return;
+    const next = [videoId, ...watchQueue.filter(id => id !== videoId)];
+    try {
+        commitWatchQueue(next);
+        setQueueSortMode("manual");
+        queueFilterQuery = "";
+        queueMessage = "Moved to the top of your Watch Queue.";
+        renderQueuePage();
+    } catch (error) {
+        console.error("Could not move video to next position", error);
+        alert("Could not save the new queue order. Please try again.");
+    }
+}
+
 function isQueued(videoId) {
     return watchQueue.includes(videoId);
 }
@@ -957,19 +1017,73 @@ function finishQueueVideo(videoId) {
 // Accept only recognised YouTube hostnames, not arbitrary websites with a v parameter.
 // parseYouTubeVideoId is provided by youtube-utils.js (loaded before app.js).
 
+function queueItemMarkup(item) {
+    const video = item.video;
+    const orderControlsEnabled = queueSortMode === "manual" && !queueFilterQuery.trim();
+    return `
+        <div class="queue-entry" data-queue-id="${escapeHtml(video.id)}">
+            <div class="queue-entry-toolbar">
+                <span class="queue-position" title="Position in your saved Watch Queue">Queue #${item.position + 1}</span>
+                <div class="queue-entry-actions">
+                    <button type="button" data-queue-operation="next" ${item.position === 0 ? "disabled" : ""}
+                        aria-label="Play ${escapeHtml(video.title)} next">⇧ Play next</button>
+                    <button type="button" data-queue-operation="up" ${!orderControlsEnabled || item.position === 0 ? "disabled" : ""}
+                        aria-label="Move ${escapeHtml(video.title)} up">↑ Up</button>
+                    <button type="button" data-queue-operation="down" ${!orderControlsEnabled || item.position === watchQueue.length - 1 ? "disabled" : ""}
+                        aria-label="Move ${escapeHtml(video.title)} down">↓ Down</button>
+                    <button type="button" data-queue-operation="done" class="queue-done"
+                        aria-label="Mark ${escapeHtml(video.title)} watched and remove from queue">✓ Done</button>
+                    <button type="button" data-queue-operation="remove"
+                        aria-label="Remove ${escapeHtml(video.title)} from queue">Remove</button>
+                </div>
+            </div>
+            ${createVideoCard(video)}
+        </div>`;
+}
+
+function updateQueueDisplay() {
+    const container = document.getElementById("queue-items-container");
+    if (!container) return;
+    const items = queueDisplayItems();
+    const status = document.getElementById("queue-view-summary");
+    if (status) status.textContent = `${items.length} of ${watchQueue.length} videos shown${queueSortMode === "manual"
+        ? " in saved queue order" : " · view sorted by " + queueSortMode}.`;
+    const sortHelp = document.getElementById("queue-sort-hint");
+    if (sortHelp) sortHelp.textContent = queueSortMode !== "manual" || queueFilterQuery.trim()
+        ? "Sorting and filtering only change what you see. To use ↑ / ↓, clear the search and select Manual order."
+        : "↑ / ↓ change your saved order. Play next moves a video to the top.";
+    container.innerHTML = items.length
+        ? items.map(queueItemMarkup).join("")
+        : watchQueue.length
+            ? '<p class="queue-empty">No matching videos. Try another title or channel, or clear the search.</p>'
+            : '<p class="queue-empty">Your queue is empty. Add videos using the Queue button under any video, or import a link above.</p>';
+    container.querySelectorAll(".queue-entry [data-queue-operation]").forEach(button => {
+        button.addEventListener("click", () => {
+            const id = button.closest("[data-queue-id]")?.dataset.queueId;
+            if (!id) return;
+            switch (button.dataset.queueOperation) {
+                case "next": playQueueVideoNext(id); break;
+                case "up": moveQueueVideo(id, -1); break;
+                case "down": moveQueueVideo(id, 1); break;
+                case "done": finishQueueVideo(id); break;
+                case "remove": toggleWatchQueue(id); break;
+            }
+        });
+    });
+    setupVideoButtons();
+}
+
 function renderQueuePage() {
     const videoList = document.querySelector(".video-list");
     const title = document.querySelector(".section-header h2");
     if (!videoList || !title) return;
     title.textContent = "Watch Queue";
     document.getElementById("refresh-page-button")?.remove();
-    const items = watchQueue.map(id => videos.find(video => video.id === id))
-        .filter(video => video && !video.hidden);
     videoList.innerHTML = `
         <section class="queue-hero" aria-label="Your watch queue">
             <span class="home-eyebrow">MY YOUTUBE · WATCH QUEUE</span>
             <h3>Watch what matters next.</h3>
-            <p>${items.length} video${items.length === 1 ? "" : "s"} in your personal watch order. Use ↑ and ↓ to rearrange.</p>
+            <p>${watchQueue.length} video${watchQueue.length === 1 ? "" : "s"} in your Watch Queue. Your manual order is always preserved unless you move a video.</p>
             <button type="button" class="queue-return" id="queue-back-home">← Back to Home</button>
         </section>
         <section class="queue-import" aria-label="Import a YouTube video">
@@ -986,37 +1100,35 @@ function renderQueuePage() {
             <p class="queue-feedback" role="status" aria-live="polite">${escapeHtml(queueMessage)}</p>
         </section>
         <section class="queue-list-section" aria-labelledby="queue-list-title">
-            <div class="home-section-title"><h3 id="queue-list-title">Your queue <span class="home-mini-count">${items.length}</span></h3></div>
-            ${items.length ? items.map((video, index) => `
-                <div class="queue-entry" data-queue-id="${escapeHtml(video.id)}">
-                    <div class="queue-entry-toolbar">
-                        <span class="queue-position">#${index + 1}</span>
-                        <div class="queue-entry-actions">
-                            <button type="button" data-queue-operation="up" ${index === 0 ? "disabled" : ""} aria-label="Move ${escapeHtml(video.title)} up">↑ Up</button>
-                            <button type="button" data-queue-operation="down" ${index === items.length - 1 ? "disabled" : ""} aria-label="Move ${escapeHtml(video.title)} down">↓ Down</button>
-                            <button type="button" data-queue-operation="done" class="queue-done" aria-label="Mark ${escapeHtml(video.title)} watched and remove from queue">✓ Done</button>
-                            <button type="button" data-queue-operation="remove" aria-label="Remove ${escapeHtml(video.title)} from queue">Remove</button>
-                        </div>
-                    </div>
-                    ${createVideoCard(video)}
-                </div>`).join("")
-                : '<p class="queue-empty">Your queue is empty. Add videos using the Queue button under any video, or import a link above.</p>'}
+            <div class="home-section-title"><h3 id="queue-list-title">Your queue <span class="home-mini-count">${watchQueue.length}</span></h3></div>
+            <div class="queue-view-tools" aria-label="Queue view options">
+                <label for="queue-filter-input">Find videos in Queue</label>
+                <input id="queue-filter-input" type="search" placeholder="Search title or channel…"
+                    autocomplete="off" value="${escapeHtml(queueFilterQuery)}">
+                <label for="queue-sort-select">Sort visible videos</label>
+                <select id="queue-sort-select">
+                    <option value="manual" ${queueSortMode === "manual" ? "selected" : ""}>Manual order (default)</option>
+                    <option value="newest" ${queueSortMode === "newest" ? "selected" : ""}>Newest first</option>
+                    <option value="oldest" ${queueSortMode === "oldest" ? "selected" : ""}>Oldest first</option>
+                    <option value="longest" ${queueSortMode === "longest" ? "selected" : ""}>Longest first</option>
+                    <option value="shortest" ${queueSortMode === "shortest" ? "selected" : ""}>Shortest first</option>
+                </select>
+                <p id="queue-view-summary" class="queue-view-summary" role="status" aria-live="polite"></p>
+                <p id="queue-sort-hint" class="queue-view-hint"></p>
+            </div>
+            <div id="queue-items-container" class="queue-items-container"></div>
         </section>`;
     document.getElementById("queue-back-home")?.addEventListener("click", () => navigateToPage("home"));
     document.getElementById("queue-import-form")?.addEventListener("submit", handleQueueImport);
-    videoList.querySelectorAll(".queue-entry [data-queue-operation]").forEach(button => {
-        button.addEventListener("click", () => {
-            const id = button.closest("[data-queue-id]")?.dataset.queueId;
-            if (!id) return;
-            switch (button.dataset.queueOperation) {
-                case "up": moveQueueVideo(id, -1); break;
-                case "down": moveQueueVideo(id, 1); break;
-                case "done": finishQueueVideo(id); break;
-                case "remove": toggleWatchQueue(id); break;
-            }
-        });
+    document.getElementById("queue-filter-input")?.addEventListener("input", event => {
+        queueFilterQuery = event.target.value.slice(0, 150);
+        updateQueueDisplay();
     });
-    setupVideoButtons();
+    document.getElementById("queue-sort-select")?.addEventListener("change", event => {
+        setQueueSortMode(event.target.value);
+        updateQueueDisplay();
+    });
+    updateQueueDisplay();
     updateNewVideoCount();
 }
 

@@ -764,6 +764,24 @@
         border:1px solid #41699b!important;min-height:42px}
     @media(max-width:370px){.smart-feed-grid{grid-template-columns:1fr}.smart-feed-hero h3{font-size:20px}}
 
+
+/* My YouTube 1.4.0 – Queue view tools. No changes to stored video order. */
+.queue-view-tools {display:grid;grid-template-columns:minmax(0,1fr);gap:7px;
+    padding:13px;background:#0e192b;border:1px solid #30445f;border-radius:12px;min-width:0}
+.queue-view-tools label {font-size:12px;color:#cbd5e1;font-weight:650}
+.queue-view-tools input,.queue-view-tools select {box-sizing:border-box;width:100%;min-width:0;
+    min-height:44px;padding:9px 10px;background:#0b1425;border:1px solid #40516d;
+    border-radius:10px;color:#f8fafc;font-size:14px}
+.queue-view-tools input:focus-visible,.queue-view-tools select:focus-visible,
+.queue-entry-actions button:focus-visible {outline:2px solid #60a5fa;outline-offset:2px}
+.queue-view-summary {margin:3px 0 0!important;color:#93c5fd!important;font-size:12px!important}
+.queue-view-hint {margin:0!important;color:#94a3b8!important;font-size:11px!important}
+.queue-items-container {display:flex;flex-direction:column;gap:12px;min-width:0}
+.queue-entry-actions button[data-queue-operation="next"] {background:#173867;border-color:#4475ad;color:#e0f2fe}
+@media(max-width:390px){
+ .queue-entry-actions {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
+ .queue-entry-actions button {min-height:40px;padding:7px 3px;font-size:11px}
+}
 </style>
 
 
@@ -934,7 +952,7 @@
     <script src="library-storage.js?v=20261102-maintenance-1-3-6"></script>
     <script src="backup-manager.js?v=20261102-maintenance-1-3-6"></script>
     <script src="ui-navigation.js?v=20261102-maintenance-1-3-6"></script>
-    <script src="app.js?v=20261102-maintenance-1-3-6"></script>
+    <script src="app.js?v=20261102-queue-1-4-0"></script>
     <script src="pwa.js?v=20261102-maintenance-1-3-6"></script>
 
 
