@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <title>My YouTube – Diagnostics</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui,-apple-system,Roboto,Arial,sans-serif; }
+    * {box-sizing:border-box}
+    body {margin:0; background:#0b1220; color:#f1f5f9; line-height:1.5; padding:18px 14px 36px}
+    main {max-width:620px; margin:auto}
+    .eyebrow {color:#93c5fd;font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase}
+    h1 {font-size:27px;margin:8px 0 8px;letter-spacing:-.5px}
+    p {color:#cbd5e1;margin:8px 0 16px;font-size:14px}
+    .panel {background:#111e32;border:1px solid #2a415e;border-radius:17px;padding:16px;margin:15px 0}
+    .summary {display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .summary strong {font-size:20px}
+    .hint {font-size:12px;color:#9fb5d0}
+    .status {font-weight:800;border-radius:20px;padding:4px 10px;background:#283449;color:#dbeafe;font-size:12px}
+    .pass {color:#86efac;background:#133b30}
+    .warn {color:#fde68a;background:#443317}
+    .fail {color:#fca5a5;background:#45212a}
+    .line {border-bottom:1px solid #26374d;padding:12px 0;display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
+    .line:last-child {border-bottom:0}
+    .test-info {min-width:0;flex:1}
+    .test-info strong {display:block;font-size:14px}
+    .test-info span {display:block;color:#a9bed6;font-size:12px;overflow-wrap:anywhere;margin-top:3px}
+    button,a.button {display:inline-flex;align-items:center;justify-content:center;min-height:45px;border:1px solid #486790;border-radius:12px;padding:10px 16px;font-weight:700;font-size:14px;color:#e2e8f0;background:#172d4d;text-decoration:none;cursor:pointer}
+    button.primary {background:#2563eb;border-color:#2563eb;color:white}
+    button:disabled {opacity:.55;cursor:wait}
+    .buttons {display:flex;gap:9px;flex-wrap:wrap}
+    .buttons>* {flex:1}
+    textarea {display:block;width:100%;min-height:152px;padding:12px;border:1px solid #405676;border-radius:12px;background:#071322;color:#e2e8f0;font-size:12px;resize:vertical;white-space:pre-wrap}
+    code {color:#bfdbfe}
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">My YouTube · PWA Health Check</div>
+  <h1>Diagnostics</h1>
+  <p>Check your app files, offline setup and local data safely. <strong>No YouTube API requests are made.</strong> This page does not read or export your API key.</p>
+  <div class="panel">
+    <div class="summary"><strong id="headline">Ready to check</strong><span class="status" id="overall">Not run</span></div>
+    <p class="hint" id="overview">Tap Run checks. Results describe this device and the files currently published on GitHub Pages.</p>
+    <div class="buttons">
+      <button type="button" class="primary" id="run">Run checks</button>
+      <a class="button" href="./?page=home">Open My YouTube</a>
+    </div>
+  </div>
+  <section class="panel" aria-label="Diagnostic results">
+    <strong>Results</strong>
+    <div id="results" aria-live="polite"><p class="hint">No tests run yet.</p></div>
+  </section>
+  <section class="panel">
+    <strong>Report</strong>
+    <p class="hint">Only technical test results and counts. No video titles, channel names, API key or other saved content.</p>
+    <textarea id="report" aria-label="Technical diagnostics report" readonly></textarea>
+    <div class="buttons" style="margin-top:10px">
+      <button type="button" id="copy">Copy report</button>
+    </div>
+    <p class="hint" id="copy-help">If Copy is blocked, long-press the report text and use the Android Copy action.</p>
+  </section>
+</main>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const tests = [];
+  const clean = value => String(value || '').replace(/[\r\n]+/g,' ').slice(0,180);
+  function record(name, result, detail) {
+    tests.push({name, result, detail:clean(detail)});
+    const row = document.createElement('div'); row.className='line';
+    const info=document.createElement('div');info.className='test-info';
+    const heading=document.createElement('strong');heading.textContent=name;
+    const description=document.createElement('span');description.textContent=clean(detail);
+    const badge=document.createElement('span');badge.className='status '+result;
+    badge.textContent={pass:'PASS',warn:'CHECK',fail:'FAIL'}[result];
+    info.append(heading,description);row.append(info,badge);$('results').append(row);
+  }
+  async function get(path, type='text') {
+    const url = new URL(path,location.href);
+    if (url.origin !== location.origin) throw new Error('Outside app origin');
+    const response = await fetch(url.href, {cache:'no-store'});
+    if (!response.ok) throw new Error('HTTP '+response.status+' · '+path);
+    return type==='json' ? response.json() : response.text();
+  }
+  async function run() {
+    $('run').disabled=true;$('results').replaceChildren();tests.length=0;
+    $('headline').textContent='Checking…';$('overall').textContent='Running';$('overall').className='status';
+    record('Secure connection', location.protocol==='https:' || location.hostname==='localhost' ? 'pass':'fail', location.protocol.toUpperCase()+' · Service Workers require HTTPS on GitHub Pages');
+    let html='',sw='',manifest=null;
+    try {
+      [html,sw,manifest]=await Promise.all([get('./index.html'),get('./sw.js'),get('./manifest.webmanifest','json')]);
+      record('Core PWA files','pass','index.html, sw.js and manifest are reachable');
+    } catch (error) {record('Core PWA files','fail',error.message);}
+    if (manifest) {
+      const shareTarget=String(manifest.share_target?.action||'');
+      const good=manifest.display==='standalone' && shareTarget.includes('share.html');
+      record('Android install and Share configuration',good?'pass':'fail',good?'Standalone app and Share Receiver configured':'Manifest missing expected PWA settings');
+    }
+    if (html && sw) {
+      const names=['youtube-utils.js','youtube-api.js','library-storage.js','backup-manager.js','ui-navigation.js','app.js','pwa.js'];
+      const missing=[];const versions=new Set();const scriptPaths=[];
+      for (const name of names) {
+        const match=html.match(new RegExp('src=["\\\']('+name.replaceAll('.','\\.')+'\\?v=([^"\\\']+))["\\\']'));
+        if (!match) {missing.push(name+' missing in index');continue;}
+        const path=match[1];versions.add(match[2]);scriptPaths.push(path);
+        if (!sw.includes('./'+path)) missing.push(name+' missing in SW cache list');
+      }
+      record('Script versions and offline cache list',missing.length===0 && versions.size===1?'pass':'fail',
+        missing.length?missing.join(', '):versions.size===1?'All 7 JavaScript files use one matching version':'Script versions are inconsistent');
+      const failed=[];
+      await Promise.all(scriptPaths.map(async name => {try {await get('./'+name);}catch(error){failed.push(clean(error.message));}}));
+      record('Published JavaScript assets',failed.length?'fail':'pass',failed.length?failed.join('; '):scriptPaths.length+' application scripts are accessible');
+      const shareGood=manifest?.share_target?.action;
+      if(shareGood){try{await get('./share.html');record('Share receiver file','pass','share.html is published');}
+        catch(error){record('Share receiver file','fail',error.message);}}
+    }
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration=await navigator.serviceWorker.getRegistration('./');
+        if (!registration) record('Installed Service Worker','warn','No active registration for this browser yet. Open My YouTube online first.');
+        else {
+          record('Installed Service Worker',registration.active?'pass':'warn',registration.active?'Active offline worker present':'Worker registration not active yet');
+          record('App update status',registration.waiting?'warn':'pass',registration.waiting?'An update is waiting. Open My YouTube and tap Update now.':'No waiting update detected');
+        }
+        if(!navigator.serviceWorker.controller)
+          record('This page controlled for offline use','warn','Diagnostics is not controlled yet; reopen after loading the app online');
+        else record('This page controlled for offline use','pass','Service Worker controls this page');
+      } catch (error){record('Service Worker status','warn',error.message);}
+    } else record('Service Worker support','fail','This browser does not support Service Workers');
+    try {
+      const cacheNames=await caches.keys();
+      const names=cacheNames.filter(name=>name.startsWith('my-youtube-shell-'));
+      record('Offline app cache',names.length?'pass':'warn',names.length?names.length+' shell cache(s) present':'No app shell stored yet');
+    } catch(error) {record('Offline app cache','warn','Cache Storage not readable: '+error.message);}
+    try {
+      const keys=['my-youtube-videos','my-youtube-channels','my-youtube-saved-searches','my-youtube-watch-queue-v1'];
+      const problems=[];let found=0;
+      for(const key of keys){
+        const value=localStorage.getItem(key);if(value===null) continue;
+        found += 1;
+        try{if(!Array.isArray(JSON.parse(value))) problems.push(key+' is not a list');}
+        catch(_){problems.push(key+' is not valid JSON');}
+      }
+      record('Saved data readability',problems.length?'fail':'pass',problems.length?problems.join('; '):found+' local library lists readable; saved content not inspected');
+    }catch(error){record('Saved data readability','warn','Local storage unavailable in this browser: '+error.message);}
+    const failures=tests.filter(test=>test.result==='fail').length;
+    const warnings=tests.filter(test=>test.result==='warn').length;
+    $('headline').textContent=failures?'Problems detected':warnings?'Check completed with notes':'Checks passed';
+    $('overall').className='status '+(failures?'fail':warnings?'warn':'pass');
+    $('overall').textContent=failures?failures+' issues':warnings?warnings+' notes':'All passed';
+    $('overview').textContent=`${tests.length} checks · ${failures} problems · ${warnings} notes. Warnings may be normal when you open this in a new browser tab.`;
+    $('report').value='My YouTube PWA Health Check\nDate: '+new Date().toISOString()+'\n'+
+      tests.map(t=>`[${t.result.toUpperCase()}] ${t.name}: ${t.detail}`).join('\n');
+    $('run').disabled=false;
+  }
+  $('run').addEventListener('click',()=>run().catch(error=>{
+    $('run').disabled=false;record('Unexpected diagnostic error','fail',error.message);
+    $('overall').textContent='Check failed';$('overall').className='status fail';
+  }));
+  $('copy').addEventListener('click',async()=>{
+    const text=$('report').value;if(!text)return;
+    try {await navigator.clipboard.writeText(text);$('copy-help').textContent='Report copied.';}
+    catch(_){$('report').focus();$('report').select();$('copy-help').textContent='Select Copy from the Android text menu.';}
+  });
+})();
+</script>
+</body>
+</html>
