@@ -1,0 +1,74 @@
+{
+  "id": "./",
+  "name": "My YouTube – Your Video Space",
+  "short_name": "My YouTube",
+  "description": "Follow YouTube channels, search long videos and manage your Watch Queue.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "./?page=home",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone"
+  ],
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Watch Queue",
+      "short_name": "Queue",
+      "url": "./?page=queue",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Search YouTube",
+      "short_name": "Search",
+      "url": "./?page=search",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "New videos",
+      "short_name": "New",
+      "url": "./?page=new",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "./?share_target=1",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
