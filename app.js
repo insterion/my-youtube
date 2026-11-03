@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Feature release 1.4.0 (2026-11-02)
+   Feature release 1.4.1 (2026-11-03)
    Helpers in youtube-utils.js; API in youtube-api.js; storage in library-storage.js; backup in backup-manager.js; UI in ui-navigation.js.
    Preserves existing storage keys and app features.
 
@@ -877,6 +877,102 @@ const QUEUE_VIEW_KEY = "my-youtube-queue-view-v1";
 const QUEUE_SORT_MODES = ["manual", "newest", "oldest", "longest", "shortest"];
 let queueSortMode = loadQueueSortMode();
 let queueFilterQuery = "";
+// View-only dashboard settings. Neither setting changes saved Watch Queue order.
+const QUEUE_GROUP_KEY = "my-youtube-queue-group-v1";
+let queueGroupByChannel = loadQueueGrouping();
+let queueChannelFilter = "";
+
+function loadQueueGrouping() {
+    try { return localStorage.getItem(QUEUE_GROUP_KEY) === "true"; }
+    catch (error) { return false; }
+}
+function setQueueGrouping(enabled) {
+    queueGroupByChannel = Boolean(enabled);
+    try { localStorage.setItem(QUEUE_GROUP_KEY, String(queueGroupByChannel)); }
+    catch (error) { console.warn("Could not save Queue grouping preference", error); }
+}
+
+// Round a known aggregate up to a whole minute. Never treat a missing
+// duration as zero when reporting how much viewing time remains.
+function formatQueueTime(totalSeconds) {
+    const minutes = Math.ceil(Math.max(0, totalSeconds) / 60);
+    const hours = Math.floor(minutes / 60);
+    const remaining = minutes % 60;
+    if (!hours) return `${minutes} min`;
+    return remaining ? `${hours}h ${remaining}m` : `${hours}h`;
+}
+function queueDashboardSummary() {
+    // Use the stored queue order and library only. This never calls YouTube API.
+    const byId = new Map(videos.map(video => [video.id, video]));
+    const groups = new Map();
+    let knownSeconds = 0;
+    let unknownCount = 0;
+    let count = 0;
+    watchQueue.forEach(id => {
+        const video = byId.get(id);
+        if (!video || video.hidden) return;
+        count++;
+        const channel = String(video.channel || "").trim() || "Unknown channel";
+        if (!groups.has(channel)) groups.set(channel, { name: channel, count: 0, seconds: 0, unknownCount: 0 });
+        const group = groups.get(channel);
+        group.count++;
+        const seconds = durationSecondsForSorting(video.duration);
+        if (seconds === null || !Number.isFinite(seconds) || seconds < 0) {
+            unknownCount++;
+            group.unknownCount++;
+        } else {
+            knownSeconds += seconds;
+            group.seconds += seconds;
+        }
+    });
+    return { count, knownSeconds, unknownCount, groups: [...groups.values()] };
+}
+function queueDurationNote(seconds, unknownCount) {
+    return `${formatQueueTime(seconds)} known${unknownCount ? ` · ${unknownCount} without duration` : ""}`;
+}
+function queueDashboardMarkup(summary) {
+    const hasUnknown = summary.unknownCount > 0;
+    const knownVideos = summary.count - summary.unknownCount;
+    return `
+        <section class="queue-dashboard" aria-label="Watch Queue dashboard">
+            <div class="queue-dashboard-heading">
+                <div><span class="home-eyebrow">YOUR WATCHING PLAN</span><h3>Queue overview</h3></div>
+                <span class="queue-dashboard-quiet">Local data · No API requests</span>
+            </div>
+            <div class="queue-dashboard-grid">
+                <div class="queue-dashboard-stat"><span>Videos queued</span><strong>${summary.count}</strong><small>In your saved order</small></div>
+                <div class="queue-dashboard-stat"><span>${hasUnknown ? "Known watch time" : "Total watch time"}</span><strong>${formatQueueTime(summary.knownSeconds)}</strong><small>${hasUnknown ? `${knownVideos} of ${summary.count} durations known` : "At normal speed (1×)"}</small></div>
+                <div class="queue-dashboard-stat"><span>At 1.5× speed</span><strong>${formatQueueTime(summary.knownSeconds / 1.5)}</strong><small>${hasUnknown ? "Known durations only" : "Approximate viewing time"}</small></div>
+                <div class="queue-dashboard-stat"><span>Channels</span><strong>${summary.groups.length}</strong><small>Represented in Queue</small></div>
+            </div>
+            ${hasUnknown ? `<p class="queue-dashboard-warning" role="note">${summary.unknownCount} video${summary.unknownCount === 1 ? " has" : "s have"} no duration. The time estimates above exclude ${summary.unknownCount === 1 ? "it" : "them"}.</p>` : ""}
+        </section>`;
+}
+function queueDisplayMarkup(items) {
+    if (!queueGroupByChannel) return items.map(queueItemMarkup).join("");
+    // Grouping is presentation-only. Group order follows the first video in
+    // the selected sort order, and original queue position stays intact.
+    const groups = new Map();
+    items.forEach(item => {
+        const channel = String(item.video.channel || "").trim() || "Unknown channel";
+        if (!groups.has(channel)) groups.set(channel, []);
+        groups.get(channel).push(item);
+    });
+    return [...groups].map(([channel, entries]) => {
+        let seconds = 0, missing = 0;
+        entries.forEach(item => {
+            const duration = durationSecondsForSorting(item.video.duration);
+            if (duration === null || !Number.isFinite(duration) || duration < 0) missing++;
+            else seconds += duration;
+        });
+        return `<section class="queue-channel-group" aria-label="${escapeHtml(channel)} videos">
+            <div class="queue-channel-heading"><h4>${escapeHtml(channel)}</h4>
+                <span>${entries.length} video${entries.length === 1 ? "" : "s"} · ${escapeHtml(queueDurationNote(seconds, missing))}</span></div>
+            <div class="queue-channel-items">${entries.map(queueItemMarkup).join("")}</div>
+        </section>`;
+    }).join("");
+}
+
 
 function loadQueueSortMode() {
     try {
@@ -897,6 +993,7 @@ function queueDisplayItems() {
         video: byId.get(id),
         position: index
     })).filter(item => item.video && !item.video.hidden &&
+        (!queueChannelFilter || (String(item.video.channel || "").trim() || "Unknown channel") === queueChannelFilter) &&
         (!query || [item.video.title, item.video.channel].some(value =>
             String(value || "").toLocaleLowerCase().includes(query))));
     if (queueSortMode === "manual") return items;
@@ -924,6 +1021,7 @@ function playQueueVideoNext(videoId) {
         commitWatchQueue(next);
         setQueueSortMode("manual");
         queueFilterQuery = "";
+        queueChannelFilter = "";
         queueMessage = "Moved to the top of your Watch Queue.";
         renderQueuePage();
     } catch (error) {
@@ -1019,7 +1117,7 @@ function finishQueueVideo(videoId) {
 
 function queueItemMarkup(item) {
     const video = item.video;
-    const orderControlsEnabled = queueSortMode === "manual" && !queueFilterQuery.trim();
+    const orderControlsEnabled = queueSortMode === "manual" && !queueFilterQuery.trim() && !queueChannelFilter && !queueGroupByChannel;
     return `
         <div class="queue-entry" data-queue-id="${escapeHtml(video.id)}">
             <div class="queue-entry-toolbar">
@@ -1048,12 +1146,22 @@ function updateQueueDisplay() {
     const status = document.getElementById("queue-view-summary");
     if (status) status.textContent = `${items.length} of ${watchQueue.length} videos shown${queueSortMode === "manual"
         ? " in saved queue order" : " · view sorted by " + queueSortMode}.`;
+    const visibleDuration = document.getElementById("queue-visible-duration");
+    if (visibleDuration) {
+        let seconds = 0, unknown = 0;
+        items.forEach(item => {
+            const duration = durationSecondsForSorting(item.video.duration);
+            if (duration === null || !Number.isFinite(duration) || duration < 0) unknown++;
+            else seconds += duration;
+        });
+        visibleDuration.textContent = `Showing ${items.length} video${items.length === 1 ? "" : "s"} · ${queueDurationNote(seconds, unknown)}`;
+    }
     const sortHelp = document.getElementById("queue-sort-hint");
-    if (sortHelp) sortHelp.textContent = queueSortMode !== "manual" || queueFilterQuery.trim()
-        ? "Sorting and filtering only change what you see. To use ↑ / ↓, clear the search and select Manual order."
+    if (sortHelp) sortHelp.textContent = queueSortMode !== "manual" || queueFilterQuery.trim() || queueChannelFilter || queueGroupByChannel
+        ? "Sorting, filtering and grouping change only what you see. For ↑ / ↓ choose Manual order, All channels, clear search and turn off grouping."
         : "↑ / ↓ change your saved order. Play next moves a video to the top.";
     container.innerHTML = items.length
-        ? items.map(queueItemMarkup).join("")
+        ? queueDisplayMarkup(items)
         : watchQueue.length
             ? '<p class="queue-empty">No matching videos. Try another title or channel, or clear the search.</p>'
             : '<p class="queue-empty">Your queue is empty. Add videos using the Queue button under any video, or import a link above.</p>';
@@ -1079,6 +1187,10 @@ function renderQueuePage() {
     if (!videoList || !title) return;
     title.textContent = "Watch Queue";
     document.getElementById("refresh-page-button")?.remove();
+    const dashboard = queueDashboardSummary();
+    if (queueChannelFilter && !dashboard.groups.some(group => group.name === queueChannelFilter)) {
+        queueChannelFilter = "";
+    }
     videoList.innerHTML = `
         <section class="queue-hero" aria-label="Your watch queue">
             <span class="home-eyebrow">MY YOUTUBE · WATCH QUEUE</span>
@@ -1099,6 +1211,7 @@ function renderQueuePage() {
             <p id="queue-import-hint" class="queue-hint">New videos need your existing YouTube API key in Settings. They are not automatically marked NEW, Saved or Watched.</p>
             <p class="queue-feedback" role="status" aria-live="polite">${escapeHtml(queueMessage)}</p>
         </section>
+        ${queueDashboardMarkup(dashboard)}
         <section class="queue-list-section" aria-labelledby="queue-list-title">
             <div class="home-section-title"><h3 id="queue-list-title">Your queue <span class="home-mini-count">${watchQueue.length}</span></h3></div>
             <div class="queue-view-tools" aria-label="Queue view options">
@@ -1113,7 +1226,19 @@ function renderQueuePage() {
                     <option value="longest" ${queueSortMode === "longest" ? "selected" : ""}>Longest first</option>
                     <option value="shortest" ${queueSortMode === "shortest" ? "selected" : ""}>Shortest first</option>
                 </select>
+                <label for="queue-channel-select">Show channel</label>
+                <select id="queue-channel-select">
+                    <option value="">All channels</option>
+                    ${dashboard.groups.slice().sort((a,b) => a.name.localeCompare(b.name)).map(group =>
+                        `<option value="${escapeHtml(group.name)}" ${group.name === queueChannelFilter ? "selected" : ""}>${escapeHtml(group.name)} (${group.count})</option>`
+                    ).join("")}
+                </select>
+                <label class="queue-group-switch" for="queue-group-toggle">
+                    <input type="checkbox" id="queue-group-toggle" ${queueGroupByChannel ? "checked" : ""}>
+                    <span>Group videos by channel <small>View only · saved order unchanged</small></span>
+                </label>
                 <p id="queue-view-summary" class="queue-view-summary" role="status" aria-live="polite"></p>
+                <p id="queue-visible-duration" class="queue-view-summary" aria-live="polite"></p>
                 <p id="queue-sort-hint" class="queue-view-hint"></p>
             </div>
             <div id="queue-items-container" class="queue-items-container"></div>
@@ -1126,6 +1251,14 @@ function renderQueuePage() {
     });
     document.getElementById("queue-sort-select")?.addEventListener("change", event => {
         setQueueSortMode(event.target.value);
+        updateQueueDisplay();
+    });
+    document.getElementById("queue-channel-select")?.addEventListener("change", event => {
+        queueChannelFilter = event.target.value;
+        updateQueueDisplay();
+    });
+    document.getElementById("queue-group-toggle")?.addEventListener("change", event => {
+        setQueueGrouping(event.target.checked);
         updateQueueDisplay();
     });
     updateQueueDisplay();

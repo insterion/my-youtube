@@ -782,6 +782,37 @@
  .queue-entry-actions {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
  .queue-entry-actions button {min-height:40px;padding:7px 3px;font-size:11px}
 }
+/* My YouTube 1.4.1 — locally computed Watch Queue dashboard. */
+.queue-dashboard {background:linear-gradient(135deg,#152d4b,#101827 75%);
+    border:1px solid #36567a;border-radius:16px;padding:16px;min-width:0;color:#f8fafc}
+.queue-dashboard-heading {display:flex;align-items:flex-start;justify-content:space-between;
+    flex-wrap:wrap;gap:10px;margin-bottom:13px}
+.queue-dashboard-heading h3 {font-size:19px;margin:5px 0 0}
+.queue-dashboard-quiet {font-size:10px;color:#a5b9d4;align-self:center}
+.queue-dashboard-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.queue-dashboard-stat {min-width:0;display:flex;flex-direction:column;gap:6px;padding:12px;
+    border:1px solid #344d6c;background:#0e1c30;border-radius:12px}
+.queue-dashboard-stat span {font-size:11px;color:#bad1ed;line-height:1.35}
+.queue-dashboard-stat strong {font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;
+    line-height:1.17;overflow-wrap:anywhere}
+.queue-dashboard-stat small {font-size:10px;color:#91a9c9;line-height:1.35}
+.queue-dashboard-warning {font-size:11px;line-height:1.5;color:#fcd9a7;margin:12px 0 0}
+.queue-view-tools .queue-group-switch {display:flex;align-items:center;gap:11px;
+    min-height:46px;padding:9px 11px;border:1px solid #40516d;background:#101f35;
+    border-radius:10px;cursor:pointer;font-size:13px;color:#f1f5f9}
+.queue-view-tools .queue-group-switch input {width:18px;height:18px;min-width:18px;min-height:18px;
+    margin:0;padding:0;accent-color:#60a5fa;flex-shrink:0}
+.queue-group-switch span {min-width:0}
+.queue-group-switch small {display:block;font-size:10px;color:#94a3b8;margin-top:3px}
+.queue-channel-group {display:flex;flex-direction:column;gap:10px;min-width:0}
+.queue-channel-heading {display:flex;flex-direction:column;gap:4px;padding:11px 12px;
+    background:#182e49;border:1px solid #365475;border-radius:11px}
+.queue-channel-heading h4 {font-size:14px;color:#e0efff;overflow-wrap:anywhere;margin:0}
+.queue-channel-heading span {font-size:11px;color:#b7cde8;line-height:1.4}
+.queue-channel-items {display:flex;flex-direction:column;gap:10px;min-width:0}
+.queue-view-tools #queue-visible-duration {color:#cbd5e1!important}
+.queue-view-tools :is(input,select):focus-visible {outline:2px solid #60a5fa;outline-offset:2px}
+@media(max-width:340px){.queue-dashboard-stat{padding:9px}.queue-dashboard-stat strong{font-size:20px}}
 </style>
 
 
@@ -952,7 +983,7 @@
     <script src="library-storage.js?v=20261102-maintenance-1-3-6"></script>
     <script src="backup-manager.js?v=20261102-maintenance-1-3-6"></script>
     <script src="ui-navigation.js?v=20261102-maintenance-1-3-6"></script>
-    <script src="app.js?v=20261102-queue-1-4-0"></script>
+    <script src="app.js?v=20261103-queue-1-4-1"></script>
     <script src="pwa.js?v=20261102-maintenance-1-3-6"></script>
 
 
