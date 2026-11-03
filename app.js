@@ -232,6 +232,10 @@ let searchResultSort = loadSearchResultSort();
 let searchInProgress = false;
 let searchResultMessage = "Enter a topic and tap Search YouTube.";
 let searchWasRun = false;
+// Search result selection is temporary and never alters saved searches or Backup.
+let searchSelectionMode = false;
+let searchSelectedIds = new Set();
+let searchBulkMessage = "";
 let searchCache = loadSearchCache();
 let libraryViewPrefs = loadLibraryViewPrefs();
 let homeLayout = loadHomeLayout();
@@ -569,19 +573,19 @@ function handleDeleteSavedSearch(id) {
     if (currentPage === "search") updateContent();
 }
 
-function handleRunSavedSearch(id) {
+function handleRunSavedSearch(id, forceFresh = false) {
     if (searchInProgress) return;
     const saved = savedSearches.find(item => item.id === id);
     if (!saved) return;
     editingSavedSearchId = null;
     searchPreferencesBeforeEdit = null;
-    runYouTubeSearch({
+    return runYouTubeSearch({
         query: saved.query,
         minMinutes: saved.minMinutes,
         resultLimit: saved.resultLimit,
         period: normalizeSearchPeriod(saved.period),
         searchDepth: normalizeSearchDepth(saved.searchDepth)
-    });
+    }, forceFresh);
 }
 
 /* =========================================
@@ -2674,6 +2678,196 @@ function toggleDownloaded(videoId) {
 }
 
 /* =========================================
+   SEARCH RESULTS — QUICK BULK ACTIONS
+   The result set and its selection are temporary. Import only on request.
+   commitWatchQueue() provides atomic Videos+Queue storage with rollback.
+   ========================================= */
+
+function visibleSearchItems() {
+    const hiddenIds = new Set(videos.filter(item => item.hidden).map(item => item.id));
+    return searchResults.filter(item => !hiddenIds.has(item.id) &&
+        Boolean(getYouTubeVideoLink(item.id)));
+}
+
+function selectedSearchItems() {
+    const selected = searchSelectedIds;
+    // Always derive from the CURRENT displayed results; stale IDs cannot be imported.
+    return visibleSearchItems().filter(item => selected.has(item.id));
+}
+
+function searchResultsToolbarMarkup(visibleItems) {
+    const count = visibleItems.filter(item => searchSelectedIds.has(item.id)).length;
+    return `<section id="search-bulk-tools" aria-label="Search result actions"
+            style="margin:12px 0 16px;padding:13px;border:1px solid #334155;
+                   border-radius:13px;background:#111827;min-width:0;box-sizing:border-box;">
+        <button type="button" id="search-select-toggle" aria-pressed="${searchSelectionMode}"
+                style="width:100%;min-height:44px;padding:9px;border:1px solid #475569;
+                       border-radius:10px;background:${searchSelectionMode ? '#1d4ed8' : '#172033'};
+                       color:white;font-weight:700;">
+            ${searchSelectionMode ? '✓ Finish selecting' : '☑ Select results'}</button>
+        ${searchSelectionMode ? `
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px;">
+                <button id="search-select-all" type="button" class="form-button"
+                    style="min-height:44px;padding:8px;">Select all shown</button>
+                <button id="search-select-clear" type="button" class="form-button"
+                    style="min-height:44px;padding:8px;">Clear selection</button>
+            </div>
+            <p id="search-selected-count" role="status" aria-live="polite"
+               style="margin:11px 0;color:#93c5fd;font-size:13px;">${count} of ${visibleItems.length} selected</p>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">
+                <button data-search-bulk="save" type="button" class="form-button"
+                    style="min-height:44px;padding:8px;" ${count ? '' : 'disabled'}>☆ Save selected</button>
+                <button data-search-bulk="queue" type="button" class="form-button"
+                    style="min-height:44px;padding:8px;" ${count ? '' : 'disabled'}>＋ Add to Queue</button>
+                <button data-search-bulk="copy" type="button" class="form-button"
+                    style="min-height:44px;padding:8px;" ${count ? '' : 'disabled'}>⧉ Copy links</button>
+                <button data-search-bulk="download" type="button" class="form-button"
+                    style="min-height:44px;padding:8px;" ${count ? '' : 'disabled'}>↓ Download .txt</button>
+            </div>` : ''}
+        <p id="search-bulk-message" role="status" aria-live="polite"
+           style="margin:${searchBulkMessage ? '10px' : '0'} 0 0;font-size:12px;color:#93c5fd;overflow-wrap:anywhere;">
+            ${escapeHtml(searchBulkMessage)}</p>
+    </section>`;
+}
+
+function updateSearchSelectionToolbar() {
+    const count = selectedSearchItems().length;
+    const countElement = document.getElementById('search-selected-count');
+    if (countElement) countElement.textContent = `${count} of ${visibleSearchItems().length} selected`;
+    document.querySelectorAll('[data-search-bulk]').forEach(button => button.disabled = !count);
+    const message = document.getElementById('search-bulk-message');
+    if (message) {
+        if (message.textContent.trim() !== searchBulkMessage) message.textContent = searchBulkMessage;
+        message.style.marginTop = searchBulkMessage ? '10px' : '0';
+    }
+    document.querySelectorAll('.search-result-select').forEach(wrapper => {
+        const checked = wrapper.querySelector('.search-result-check')?.checked;
+        wrapper.style.borderColor = checked ? '#60a5fa' : 'transparent';
+    });
+}
+
+function searchSelectedLinks() {
+    return selectedSearchItems().map(item => getYouTubeVideoLink(item.id));
+}
+
+async function copySearchSelectedLinks() {
+    const links = searchSelectedLinks();
+    if (!links.length) return;
+    const content = links.join('\n');
+    let copied = false;
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(content);
+            copied = true;
+        }
+    } catch (error) { console.warn('Search clipboard unavailable', error); }
+    if (!copied) {
+        const input = document.createElement('textarea');
+        input.value = content;
+        input.readOnly = true;
+        input.style.cssText = 'position:fixed;left:-9999px;opacity:0;';
+        document.body.appendChild(input);
+        input.focus();
+        input.select();
+        try { copied = Boolean(document.execCommand('copy')); }
+        catch (error) { console.warn('Search copy fallback unavailable', error); }
+        finally { input.remove(); }
+    }
+    searchBulkMessage = copied
+        ? `Copied ${links.length} YouTube link${links.length === 1 ? '' : 's'}.`
+        : 'Clipboard blocked. Use Download .txt instead.';
+    updateSearchSelectionToolbar();
+}
+
+function downloadSearchSelectedLinks() {
+    const links = searchSelectedLinks();
+    if (!links.length) return;
+    let blobUrl = '';
+    try {
+        blobUrl = URL.createObjectURL(new Blob([links.join('\n') + '\n'],
+            { type: 'text/plain;charset=utf-8' }));
+        const anchor = document.createElement('a');
+        anchor.href = blobUrl;
+        anchor.download = `my-youtube-search-links-${new Date().toISOString().slice(0,10)}.txt`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        searchBulkMessage = `Prepared ${links.length} link${links.length === 1 ? '' : 's'} for download.`;
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+    } catch (error) {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        searchBulkMessage = 'Could not create the .txt file. Try Copy links.';
+        console.warn('Search links download failed', error);
+    }
+    updateSearchSelectionToolbar();
+}
+
+function applySearchBulkAction(action) {
+    if (!searchSelectionMode || currentPage !== 'search') return;
+    if (action === 'copy') { void copySearchSelectedLinks(); return; }
+    if (action === 'download') { downloadSearchSelectedLinks(); return; }
+    if (action !== 'save' && action !== 'queue') return;
+    if (!canModifyLibrary()) return;
+    const selected = selectedSearchItems();
+    if (!selected.length) return;
+
+    const byId = new Map(videos.map((video, index) => [video.id, index]));
+    const nextVideos = videos.map(video => ({ ...video }));
+    const nextQueue = [...watchQueue];
+    let changed = 0;
+    for (const found of selected) {
+        if (!getYouTubeVideoLink(found.id)) continue;
+        const index = byId.get(found.id);
+        const stored = index === undefined ? null : nextVideos[index];
+        if (stored?.hidden) continue;
+        if (action === 'save') {
+            if (stored?.saved) continue;
+            if (stored) stored.saved = true;
+            else {
+                byId.set(found.id, nextVideos.length);
+                nextVideos.push({ ...found, saved: true, isNew: false });
+            }
+            changed += 1;
+        } else if (!nextQueue.includes(found.id)) {
+            if (index === undefined) {
+                byId.set(found.id, nextVideos.length);
+                nextVideos.push({ ...found, isNew: false });
+            }
+            nextQueue.push(found.id);
+            changed += 1;
+        }
+    }
+    if (nextQueue.length > WATCH_QUEUE_LIMIT) {
+        searchBulkMessage = `Watch Queue has room for only ${WATCH_QUEUE_LIMIT - watchQueue.length} more videos. Nothing changed.`;
+        updateSearchSelectionToolbar();
+        return;
+    }
+    try {
+        if (changed) commitWatchQueue(nextQueue, nextVideos);
+    } catch (error) {
+        console.error('Search results bulk action failed', error);
+        searchBulkMessage = 'Could not save changes. Your previous Library and Queue were kept.';
+        updateSearchSelectionToolbar();
+        return;
+    }
+    searchSelectedIds.clear();
+    searchSelectionMode = false;
+    searchBulkMessage = changed
+        ? action === 'save'
+            ? `Saved ${changed} new video${changed === 1 ? '' : 's'} to your library.`
+            : `Added ${changed} video${changed === 1 ? '' : 's'} to Watch Queue.`
+        : action === 'save' ? 'All selected videos were already Saved.'
+            : 'All selected videos were already in Watch Queue.';
+    updateContent();
+}
+
+function resetSearchSelection() {
+    searchSelectedIds.clear();
+    searchSelectionMode = false;
+    searchBulkMessage = '';
+}
+
+/* =========================================
    YOUTUBE SEARCH — MANUAL / USER-INITIATED
    ========================================= */
 
@@ -2689,13 +2883,24 @@ function renderSearchPage() {
     // but never mark search-only videos as NEW.
     const visibleSearchResults = searchResults.filter(item =>
         !videos.some(stored => stored.id === item.id && stored.hidden));
+    const displayedSearchIds = new Set(visibleSearchResults.map(item => item.id));
+    searchSelectedIds = new Set([...searchSelectedIds].filter(id => displayedSearchIds.has(id)));
     const resultCards = getSortedSearchResults(visibleSearchResults, searchResultSort).map(item => {
         const stored = videos.find(video => video.id === item.id);
         const display = stored
             ? { ...item, watched: stored.watched, saved: stored.saved,
                 downloaded: stored.downloaded, isNew: false }
             : { ...item, isNew: false };
-        return createVideoCard(display);
+        const selected = searchSelectedIds.has(item.id);
+        return `${searchSelectionMode ? `<div class="search-result-select" style="padding:8px 8px 0;
+                border:1px solid ${selected ? '#60a5fa' : 'transparent'};border-radius:12px;">
+                <label style="display:flex;align-items:center;gap:9px;min-height:44px;
+                       color:#dbeafe;font-size:13px;font-weight:700;">
+                    <input type="checkbox" class="search-result-check" value="${escapeHtml(item.id)}"
+                           style="width:20px;height:20px;accent-color:#60a5fa;"
+                           ${selected ? 'checked' : ''}>
+                    Select this result
+                </label>` : ''}${createVideoCard(display)}${searchSelectionMode ? '</div>' : ''}`;
     }).join("");
 
     const savedSearchCards = savedSearches.length > 0
@@ -2712,14 +2917,20 @@ function renderSearchPage() {
                         ${item.minMinutes}+ min · ${item.resultLimit} videos · ${searchPeriodLabel(item.period)} · ${searchDepthLabel(item.searchDepth)} · Newest first
                     </div>
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
-                            width:100%;min-width:0;gap:6px;">
+                <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+                            width:100%;min-width:0;gap:8px;">
                     <button type="button" class="saved-search-run"
                             data-saved-search-id="${escapeHtml(item.id)}"
                             aria-label="Run saved search ${escapeHtml(item.query)}"
                             style="width:100%;min-width:0;box-sizing:border-box;padding:9px 4px;border-radius:9px;
                                    border:none;background:#2563eb;color:white;"
                             ${searchInProgress ? "disabled" : ""}>Run</button>
+                    <button type="button" class="saved-search-fresh"
+                            data-saved-search-id="${escapeHtml(item.id)}"
+                            aria-label="Get fresh YouTube results for ${escapeHtml(item.query)}"
+                            style="width:100%;min-width:0;box-sizing:border-box;padding:10px 4px;border-radius:9px;
+                                   border:1px solid #60a5fa;background:#173867;color:#dbeafe;"
+                            ${searchInProgress ? "disabled" : ""}>↻ Run fresh</button>
                     <button type="button" class="saved-search-edit"
                             data-saved-search-id="${escapeHtml(item.id)}"
                             aria-label="Edit saved search ${escapeHtml(item.query)}"
@@ -2867,6 +3078,7 @@ function renderSearchPage() {
             <div class="empty-state"><h3>All results are hidden</h3>
                 <p>Restore videos in Settings → Hidden videos, or try another search.</p>
             </div>` : ""}
+        ${searchWasRun && visibleSearchResults.length > 0 ? searchResultsToolbarMarkup(visibleSearchResults) : ''}
         ${resultCards}
     `;
 
@@ -2891,6 +3103,10 @@ function renderSearchPage() {
         button.addEventListener("click", () =>
             handleRunSavedSearch(button.dataset.savedSearchId));
     });
+    document.querySelectorAll(".saved-search-fresh").forEach(button => {
+        button.addEventListener("click", () =>
+            handleRunSavedSearch(button.dataset.savedSearchId, true));
+    });
     document.querySelectorAll(".saved-search-edit").forEach(button => {
         button.addEventListener("click", () =>
             handleEditSavedSearch(button.dataset.savedSearchId));
@@ -2901,6 +3117,32 @@ function renderSearchPage() {
     });
     document.getElementById("cancel-edit-search-button")
         ?.addEventListener("click", handleCancelEditSavedSearch);
+    document.getElementById('search-select-toggle')?.addEventListener('click', () => {
+        searchSelectionMode = !searchSelectionMode;
+        searchSelectedIds.clear();
+        searchBulkMessage = '';
+        updateContent();
+    });
+    document.getElementById('search-select-all')?.addEventListener('click', () => {
+        searchSelectedIds = new Set(visibleSearchItems().map(item => item.id));
+        document.querySelectorAll('.search-result-check').forEach(input => { input.checked = true; });
+        updateSearchSelectionToolbar();
+    });
+    document.getElementById('search-select-clear')?.addEventListener('click', () => {
+        searchSelectedIds.clear();
+        document.querySelectorAll('.search-result-check').forEach(input => { input.checked = false; });
+        updateSearchSelectionToolbar();
+    });
+    document.querySelectorAll('.search-result-check').forEach(input => {
+        input.addEventListener('change', () => {
+            if (input.checked) searchSelectedIds.add(input.value);
+            else searchSelectedIds.delete(input.value);
+            updateSearchSelectionToolbar();
+        });
+    });
+    document.querySelectorAll('[data-search-bulk]').forEach(button => {
+        button.addEventListener('click', () => applySearchBulkAction(button.dataset.searchBulk));
+    });
     setupVideoButtons();
 }
 
@@ -2930,6 +3172,7 @@ async function runYouTubeSearch(preferences, forceFresh = false) {
     searchPreferencesBeforeEdit = null;
     searchPreferences = { ...preferences };
     saveSearchPreferences();
+    resetSearchSelection();
 
     const cached = forceFresh ? null : getCachedSearch(searchPreferences);
     if (cached) {
