@@ -636,6 +636,16 @@
         font-size:11px;line-height:1.25;font-weight:700;
         overflow-wrap:break-word;white-space:normal;
     }
+    /* Brave links use real Android intent anchors: preserve a tap gesture. */
+    .video-card-v3 .brave-button {
+        display:inline-flex;align-items:center;justify-content:center;
+        text-decoration:none;text-align:center;touch-action:manipulation;
+        color:#fff1e6;background:#723515;border:1px solid #c86b35;
+    }
+    .video-card-v3 .brave-button:active {background:#91441d;}
+    .home-watch-links {display:flex;flex-wrap:wrap;gap:7px;align-items:center;}
+    .home-watch-links .home-inline-action {align-self:auto;}
+    .home-watch-links .home-brave-link {color:#ffc18d;}
     .video-card-v3 .video-hide-button {
         margin:0;min-height:42px;
         color:#d2deed;background:#1c2a3f;
@@ -1023,7 +1033,7 @@
     <script src="library-storage.js?v=20261102-maintenance-1-3-6"></script>
     <script src="backup-manager.js?v=20261102-maintenance-1-3-6"></script>
     <script src="ui-navigation.js?v=20261103-saved-1-4-3"></script>
-    <script src="app.js?v=20261103-channels-1-4-5"></script>
+    <script src="app.js?v=20261103-brave-1-4-6"></script>
     <script src="pwa.js?v=20261102-maintenance-1-3-6"></script>
 
 

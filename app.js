@@ -1936,9 +1936,13 @@ function renderHomePage() {
                     <div class="home-quick-details">
                         <div class="home-quick-title">${escapeHtml(video.title)}</div>
                         <div class="home-quick-meta">${escapeHtml(video.channel)}${video.duration ? ` · ${escapeHtml(video.duration)}` : ""}</div>
-                        ${url ? `<a class="home-inline-action" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
-                            aria-label="Watch ${escapeHtml(video.title)} on YouTube">▶ Watch on YouTube</a>`
-                            : `<span class="home-quick-meta">Video link unavailable</span>`}
+                        ${url ? `<div class="home-watch-links">
+                            <a class="home-inline-action" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
+                                aria-label="Watch ${escapeHtml(video.title)} on YouTube">▶ Watch on YouTube</a>
+                            <a class="home-inline-action home-brave-link" href="${escapeHtml(getBraveVideoLink(video.id))}"
+                                aria-label="Open ${escapeHtml(video.title)} in Brave browser"
+                                title="Try Brave on Android; fallback to YouTube">🦁 Brave</a>
+                            </div>` : `<span class="home-quick-meta">Video link unavailable</span>`}
                         <div class="home-quick-controls" role="group"
                              aria-label="Actions for ${escapeHtml(video.title)}">
                             <button type="button" class="home-quick-action" data-home-video-action="watched"
@@ -2438,6 +2442,21 @@ function setupLibraryControls() {
    VIDEO CARD
    ========================================= */
 
+// Use a direct <a href="intent:..."> activation (not an asynchronous JS redirect):
+// Chrome on Android requires a real user click to launch an external app.
+// Brave stable Android package: com.brave.browser.
+// If Brave/Android declines the intent, Chrome may follow the canonical YouTube
+// fallback URL. A PWA cannot promise the external browser will always launch.
+function getBraveVideoLink(videoId) {
+    const youtubeUrl = getYouTubeVideoLink(videoId);
+    if (!youtubeUrl) return "";
+    if (!/Android/i.test(navigator.userAgent)) return youtubeUrl;
+    const id = String(videoId ?? "").trim();
+    return `intent://www.youtube.com/watch?v=${encodeURIComponent(id)}` +
+        `#Intent;scheme=https;action=android.intent.action.VIEW;package=com.brave.browser;` +
+        `S.browser_fallback_url=${encodeURIComponent(youtubeUrl)};end`;
+}
+
 // getYouTubeVideoLink is provided by youtube-utils.js (loaded before app.js).
 
 function createVideoCard(video, selectable = false) {
@@ -2487,6 +2506,9 @@ function createVideoCard(video, selectable = false) {
             </div>
             <div class="video-card-actions" aria-label="Video actions">
                 <button class="action-button watch-button" type="button">▶ Watch</button>
+                ${videoLink ? `<a class="action-button brave-button" href="${escapeHtml(getBraveVideoLink(video.id))}"
+                    aria-label="Open ${escapeHtml(video.title)} in Brave browser"
+                    title="Try opening this video in Brave on Android; YouTube fallback if unavailable">🦁 Brave</a>` : ""}
                 <button class="action-button save-button ${video.saved ? "is-active" : ""}"
                         type="button" aria-pressed="${video.saved}">${savedText}</button>
                 <button class="action-button watched-button ${video.watched ? "is-active" : ""}"
