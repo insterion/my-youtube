@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Feature release 1.4.1 (2026-11-03)
+   Feature release 1.4.2 (2026-11-03)
    Helpers in youtube-utils.js; API in youtube-api.js; storage in library-storage.js; backup in backup-manager.js; UI in ui-navigation.js.
    Preserves existing storage keys and app features.
 
@@ -881,6 +881,10 @@ let queueFilterQuery = "";
 const QUEUE_GROUP_KEY = "my-youtube-queue-group-v1";
 let queueGroupByChannel = loadQueueGrouping();
 let queueChannelFilter = "";
+// Temporary selection; no new localStorage keys or Backup fields.
+let queueSelectMode = false;
+const queueSelectedIds = new Set();
+let queueBulkMessage = "";
 
 function loadQueueGrouping() {
     try { return localStorage.getItem(QUEUE_GROUP_KEY) === "true"; }
@@ -1119,7 +1123,11 @@ function queueItemMarkup(item) {
     const video = item.video;
     const orderControlsEnabled = queueSortMode === "manual" && !queueFilterQuery.trim() && !queueChannelFilter && !queueGroupByChannel;
     return `
-        <div class="queue-entry" data-queue-id="${escapeHtml(video.id)}">
+        <div class="queue-entry ${queueSelectedIds.has(video.id) && queueSelectMode ? "queue-entry-selected" : ""}" data-queue-id="${escapeHtml(video.id)}">
+            ${queueSelectMode ? `<label class="queue-bulk-item-label">
+                <input type="checkbox" class="queue-bulk-check" value="${escapeHtml(video.id)}"
+                    aria-label="Select ${escapeHtml(video.title)}" ${queueSelectedIds.has(video.id) ? "checked" : ""}>
+                <span>Select this video</span></label>` : ""}
             <div class="queue-entry-toolbar">
                 <span class="queue-position" title="Position in your saved Watch Queue">Queue #${item.position + 1}</span>
                 <div class="queue-entry-actions">
@@ -1139,10 +1147,137 @@ function queueItemMarkup(item) {
         </div>`;
 }
 
+// All selected actions apply only to the videos currently visible. Switching
+// the search/filter drops hidden selections, preventing surprising bulk edits.
+function selectedVisibleQueueIds() {
+    if (!queueSelectMode) return [];
+    return queueDisplayItems().map(item => item.video.id)
+        .filter(id => queueSelectedIds.has(id) && watchQueue.includes(id));
+}
+
+function updateQueueBulkToolbar(items = queueDisplayItems()) {
+    const visible = new Set(items.map(item => item.video.id));
+    for (const id of queueSelectedIds) {
+        if (!visible.has(id) || !watchQueue.includes(id)) queueSelectedIds.delete(id);
+    }
+    const selected = queueSelectedIds.size;
+    const count = document.getElementById("queue-bulk-count");
+    if (count) count.textContent = `${selected} of ${items.length} shown videos selected`;
+    const all = document.getElementById("queue-bulk-all");
+    if (all) {
+        all.textContent = items.length && selected === items.length ? "Deselect all shown" : "Select all shown";
+        all.disabled = items.length === 0;
+    }
+    document.querySelectorAll("#queue-bulk-panel [data-queue-bulk-action]").forEach(button => {
+        button.disabled = selected === 0;
+    });
+    const note = document.getElementById("queue-bulk-message");
+    if (note) note.textContent = queueBulkMessage;
+}
+
+function queueBulkLinks() {
+    // Export in the exact on-screen order, including channel grouping.
+    const allowed = new Set(selectedVisibleQueueIds());
+    return [...document.querySelectorAll("#queue-items-container .queue-entry[data-queue-id]")]
+        .map(entry => entry.dataset.queueId)
+        .filter(id => allowed.has(id))
+        .map(id => getYouTubeVideoLink(id))
+        .filter(Boolean);
+}
+
+async function copyQueueBulkLinks() {
+    const links = queueBulkLinks();
+    if (!links.length) return;
+    const content = links.join("\n");
+    let copied = false;
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(content);
+            copied = true;
+        }
+    } catch (error) {
+        console.warn("Clipboard API blocked; trying local fallback", error);
+    }
+    if (!copied) {
+        const textarea = document.createElement("textarea");
+        textarea.value = content;
+        textarea.readOnly = true;
+        textarea.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try { copied = Boolean(document.execCommand("copy")); }
+        catch (error) { console.warn("Clipboard fallback unavailable", error); }
+        finally { textarea.remove(); }
+    }
+    queueBulkMessage = copied
+        ? `Copied ${links.length} YouTube link${links.length === 1 ? "" : "s"}.`
+        : "Clipboard access was denied. Use Download .txt to save the selected links.";
+    updateQueueBulkToolbar();
+}
+
+function downloadQueueBulkLinks() {
+    const links = queueBulkLinks();
+    if (!links.length) return;
+    let url;
+    try {
+        const blob = new Blob([links.join("\n") + "\n"], { type: "text/plain;charset=utf-8" });
+        url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `my-youtube-queue-links-${new Date().toISOString().slice(0, 10)}.txt`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        queueBulkMessage = `Prepared ${links.length} link${links.length === 1 ? "" : "s"} for download.`;
+        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (error) {
+        if (url) URL.revokeObjectURL(url);
+        console.error("Queue links download failed", error);
+        queueBulkMessage = "Could not download links. Try Copy links instead.";
+    }
+    updateQueueBulkToolbar();
+}
+
+function applyQueueBulkAction(action) {
+    if (action !== "done" && action !== "remove") return;
+    if (!canModifyLibrary()) return;
+    const ids = selectedVisibleQueueIds();
+    if (!ids.length) return;
+    const n = ids.length;
+    const prompt = action === "done"
+        ? `Mark ${n} selected video${n === 1 ? "" : "s"} as watched and remove from Watch Queue? Saved videos will remain saved.`
+        : `Remove ${n} selected video${n === 1 ? "" : "s"} from Watch Queue? Videos will remain in your library.`;
+    if (!window.confirm(prompt)) return;
+    const selected = new Set(ids);
+    const nextQueue = watchQueue.filter(id => !selected.has(id));
+    const nextVideos = action === "done" ? videos.map(video => selected.has(video.id)
+        ? { ...video, watched: true, isNew: false } : video) : videos;
+    try {
+        // Atomic storage update: if one write fails, restore previous data.
+        commitWatchQueue(nextQueue, nextVideos);
+    } catch (error) {
+        console.error("Could not save bulk Queue changes", error);
+        queueBulkMessage = "Could not save changes. Your previous Queue was retained. Check available Chrome storage.";
+        updateQueueBulkToolbar();
+        return;
+    }
+    queueSelectedIds.clear();
+    queueSelectMode = false;
+    queueBulkMessage = "";
+    queueMessage = action === "done"
+        ? `Marked ${n} video${n === 1 ? "" : "s"} as watched and removed from Queue.`
+        : `Removed ${n} video${n === 1 ? "" : "s"} from Queue. Library entries are kept.`;
+    renderQueuePage();
+    updateNewVideoCount();
+}
+
 function updateQueueDisplay() {
     const container = document.getElementById("queue-items-container");
     if (!container) return;
     const items = queueDisplayItems();
+    // Drop selections that are no longer shown after a filter change.
+    updateQueueBulkToolbar(items);
     const status = document.getElementById("queue-view-summary");
     if (status) status.textContent = `${items.length} of ${watchQueue.length} videos shown${queueSortMode === "manual"
         ? " in saved queue order" : " · view sorted by " + queueSortMode}.`;
@@ -1176,6 +1311,15 @@ function updateQueueDisplay() {
                 case "done": finishQueueVideo(id); break;
                 case "remove": toggleWatchQueue(id); break;
             }
+        });
+    });
+    container.querySelectorAll(".queue-bulk-check").forEach(input => {
+        input.addEventListener("change", () => {
+            if (input.checked) queueSelectedIds.add(input.value);
+            else queueSelectedIds.delete(input.value);
+            input.closest(".queue-entry")?.classList.toggle("queue-entry-selected", input.checked);
+            queueBulkMessage = "";
+            updateQueueBulkToolbar(items);
         });
     });
     setupVideoButtons();
@@ -1214,6 +1358,28 @@ function renderQueuePage() {
         ${queueDashboardMarkup(dashboard)}
         <section class="queue-list-section" aria-labelledby="queue-list-title">
             <div class="home-section-title"><h3 id="queue-list-title">Your queue <span class="home-mini-count">${watchQueue.length}</span></h3></div>
+            <div class="queue-bulk-topbar">
+                <button type="button" id="queue-bulk-toggle" aria-pressed="${queueSelectMode}">
+                    ${queueSelectMode ? "✕ Done selecting" : "☑ Select videos"}</button>
+                <span>Choose multiple videos for one action</span>
+            </div>
+            ${queueSelectMode ? `<div id="queue-bulk-panel" class="queue-bulk-panel" aria-label="Actions for selected queue videos">
+                <div class="queue-bulk-selection">
+                    <strong id="queue-bulk-count">0 videos selected</strong>
+                    <div class="queue-bulk-pick-actions">
+                        <button type="button" id="queue-bulk-all">Select all shown</button>
+                        <button type="button" id="queue-bulk-clear">Clear selection</button>
+                    </div>
+                </div>
+                <div class="queue-bulk-action-grid">
+                    <button type="button" data-queue-bulk-action="copy">⧉ Copy links</button>
+                    <button type="button" data-queue-bulk-action="download">↓ Download .txt</button>
+                    <button type="button" data-queue-bulk-action="done" class="queue-bulk-done">✓ Mark watched</button>
+                    <button type="button" data-queue-bulk-action="remove" class="queue-bulk-remove">Remove from Queue</button>
+                </div>
+                <p class="queue-bulk-warning">Only selected visible videos are affected. Mark watched and Remove require confirmation. No video is deleted from the library.</p>
+                <p id="queue-bulk-message" class="queue-bulk-feedback" role="status" aria-live="polite"></p>
+            </div>` : ""}
             <div class="queue-view-tools" aria-label="Queue view options">
                 <label for="queue-filter-input">Find videos in Queue</label>
                 <input id="queue-filter-input" type="search" placeholder="Search title or channel…"
@@ -1244,6 +1410,33 @@ function renderQueuePage() {
             <div id="queue-items-container" class="queue-items-container"></div>
         </section>`;
     document.getElementById("queue-back-home")?.addEventListener("click", () => navigateToPage("home"));
+    document.getElementById("queue-bulk-toggle")?.addEventListener("click", () => {
+        queueSelectMode = !queueSelectMode;
+        queueSelectedIds.clear();
+        queueBulkMessage = "";
+        renderQueuePage();
+    });
+    document.getElementById("queue-bulk-all")?.addEventListener("click", () => {
+        const shown = queueDisplayItems().map(item => item.video.id);
+        const allChecked = shown.length > 0 && shown.every(id => queueSelectedIds.has(id));
+        queueSelectedIds.clear();
+        if (!allChecked) shown.forEach(id => queueSelectedIds.add(id));
+        queueBulkMessage = "";
+        updateQueueDisplay();
+    });
+    document.getElementById("queue-bulk-clear")?.addEventListener("click", () => {
+        queueSelectedIds.clear();
+        queueBulkMessage = "";
+        updateQueueDisplay();
+    });
+    document.querySelectorAll("#queue-bulk-panel [data-queue-bulk-action]").forEach(button => {
+        button.addEventListener("click", () => {
+            const action = button.dataset.queueBulkAction;
+            if (action === "copy") void copyQueueBulkLinks();
+            if (action === "download") downloadQueueBulkLinks();
+            if (action === "done" || action === "remove") applyQueueBulkAction(action);
+        });
+    });
     document.getElementById("queue-import-form")?.addEventListener("submit", handleQueueImport);
     document.getElementById("queue-filter-input")?.addEventListener("input", event => {
         queueFilterQuery = event.target.value.slice(0, 150);
