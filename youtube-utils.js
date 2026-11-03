@@ -1,7 +1,7 @@
 /* My YouTube PWA 1.3.2 — pure YouTube / display utilities.
    Load as a classic script before app.js so existing function names remain available.
    No storage, network, application state, or DOM dependencies.
-   Functions copied without behavioural changes from PWA 1.3.1. */
+   The channel parser is extended in 1.4.7 for @handles, channel URLs and video URLs. */
 'use strict';
 
 function durationSecondsForSorting(value) {
@@ -65,53 +65,52 @@ function parseYouTubeDurationSeconds(isoDuration) {
         Number(match[4] || 0);
 }
 
-function parseYouTubeChannelUrl(url) {
-    let parsedUrl;
+function parseYouTubeChannelUrl(input) {
+    // Resolve channel URLs, a pasted @handle or a video URL. The latter is
+    // looked up with videos.list before channels.list; no costly search.list.
+    const invalid = { valid: false, type: null, value: null };
+    let raw = String(input || "").trim();
+    if (!raw || raw.length > 2048) return invalid;
 
-    try {
-        parsedUrl = new URL(url);
-    } catch (error) {
-        return { valid: false, type: null, value: null };
+    if (/^@[\p{L}\p{N}._\-\u00b7]{2,60}$/u.test(raw)) {
+        return { valid: true, type: "handle", value: raw };
+    }
+    if (/^UC[A-Za-z0-9_-]{22}$/.test(raw)) {
+        return { valid: true, type: "id", value: raw };
     }
 
-    const hostname = parsedUrl.hostname
-        .toLowerCase()
-        .replace(/^www\./, "");
-
-    if (
-        hostname !== "youtube.com" &&
-        hostname !== "m.youtube.com"
-    ) {
-        return { valid: false, type: null, value: null };
+    if (/^(?:www\.|m\.)?youtube\.com\//i.test(raw) || /^youtu\.be\//i.test(raw)) {
+        raw = `https://${raw}`;
     }
+    let url;
+    try { url = new URL(raw); } catch (error) { return invalid; }
+    if (!["https:", "http:"].includes(url.protocol) ||
+        url.username || url.password || url.port) return invalid;
+    const host = url.hostname.toLowerCase();
+    const accepted = ["youtube.com", "www.youtube.com", "m.youtube.com",
+        "music.youtube.com", "youtu.be", "www.youtu.be"];
+    if (!accepted.includes(host)) return invalid;
 
-    const path = parsedUrl.pathname.replace(/\/+$/, "");
+    const videoId = parseYouTubeVideoId(url.href);
+    if (videoId) return { valid: true, type: "video", value: videoId };
+    if (host === "youtu.be" || host === "www.youtu.be") return invalid;
 
-    if (path.startsWith("/@")) {
-        return {
-            valid: true,
-            type: "handle",
-            value: path.substring(1)
-        };
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (!parts.length) return invalid;
+    let first;
+    try { first = decodeURIComponent(parts[0]); }
+    catch (error) { return invalid; }
+    // /@handle/videos, /channel/UC.../featured, /user/name/about are valid.
+    if (/^@[\p{L}\p{N}._\-\u00b7]{2,60}$/u.test(first)) {
+        return { valid: true, type: "handle", value: first };
     }
-
-    if (path.startsWith("/channel/")) {
-        return {
-            valid: true,
-            type: "id",
-            value: path.substring("/channel/".length)
-        };
+    if (first === "channel" && /^UC[A-Za-z0-9_-]{22}$/.test(parts[1] || "")) {
+        return { valid: true, type: "id", value: parts[1] };
     }
-
-    if (path.startsWith("/user/")) {
-        return {
-            valid: true,
-            type: "username",
-            value: path.substring("/user/".length)
-        };
+    if (first === "user" && /^[A-Za-z0-9._-]{1,100}$/.test(parts[1] || "")) {
+        return { valid: true, type: "username", value: parts[1] };
     }
-
-    return { valid: false, type: null, value: null };
+    return invalid;
 }
 
 function formatYouTubeDate(dateString) {

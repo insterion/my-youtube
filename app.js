@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Feature release 1.4.5 (2026-11-03)
+   Feature release 1.4.7 (2026-11-03)
    Helpers in youtube-utils.js; API in youtube-api.js; storage in library-storage.js; backup in backup-manager.js; UI in ui-navigation.js.
    Preserves existing storage keys and app features.
 
@@ -3339,6 +3339,17 @@ async function searchYouTubeVideos(query, minimumMinutes, resultLimit, period = 
    ========================================= */
 
 async function findYouTubeChannel(parsedUrl) {
+    if (parsedUrl.type === "video") {
+        const videoResponse = await youtubeApiRequest("videos", {
+            part: "snippet",
+            id: parsedUrl.value
+        });
+        const channelId = videoResponse?.items?.[0]?.snippet?.channelId;
+        if (!/^UC[A-Za-z0-9_-]{22}$/.test(channelId || "")) {
+            throw new Error("CHANNEL_NOT_FOUND");
+        }
+        parsedUrl = { valid: true, type: "id", value: channelId };
+    }
     const parameters = {
         part: "snippet,contentDetails"
     };
@@ -4152,229 +4163,276 @@ function deleteChannel(channelId) {
 }
 
 /* =========================================
-   ADD CHANNEL FORM
+   CHANNEL DISCOVERY — PREVIEW BEFORE FOLLOW
    ========================================= */
+
+let channelDiscoveryRequest = 0;
+let channelDiscoveryPreview = null;
+let channelFollowInProgress = false;
 
 function showAddChannelForm() {
-    const videoList =
-        document.querySelector(".video-list");
+    const videoList = document.querySelector(".video-list");
+    if (!videoList || document.querySelector("#channel-discovery-form")) return;
 
-    if (!videoList) return;
-
-    if (document.querySelector(".channel-form")) {
-        return;
-    }
-
-    const existingApiKey = getApiKey();
-
-    const apiKeyHtml = existingApiKey
-        ? `
-            <p class="api-key-saved">
-                ✓ API key already saved
-            </p>
-          `
-        : `
-            <label>
-                YouTube API key
-
-                <input type="password"
-                       id="youtube-api-key-input"
-                       placeholder="Paste your API key here"
-                       autocomplete="off">
-            </label>
-          `;
-
+    const apiKeyHtml = getApiKey()
+        ? `<p class="api-key-saved">✓ YouTube API key already saved</p>`
+        : `<label>YouTube API key
+               <input type="password" id="youtube-api-key-input"
+                      placeholder="Paste your API key" autocomplete="off">
+           </label>`;
     const form = document.createElement("div");
-    form.className = "channel-form";
-
+    form.className = "channel-form channel-discovery-form";
+    form.id = "channel-discovery-form";
     form.innerHTML = `
-        <h3>Add YouTube Channel</h3>
-
-        <label>
-            YouTube channel URL
-
-            <input type="url"
-                   id="channel-url-input"
-                   placeholder="https://youtube.com/@channel"
-                   autocomplete="off">
-        </label>
-
+        <h3>Add YouTube channel</h3>
+        <p class="channel-discovery-hint">Paste a channel link, <strong>@handle</strong>,
+           or a link to one of the channel's videos (including Shorts).</p>
+        <label for="channel-url-input">Channel or YouTube video link</label>
+        <input type="text" inputmode="url" autocapitalize="none"
+               spellcheck="false" id="channel-url-input"
+               placeholder="youtube.com/@channel or video link"
+               autocomplete="off" maxlength="2048">
+        <p class="channel-discovery-hint">On Android, long-press the field and choose Paste.</p>
         ${apiKeyHtml}
-
         <div class="form-actions">
-            <button class="form-button form-save-button"
-                    id="save-channel-button"
-                    type="button">
-                Find channel
-            </button>
-
-            <button class="form-button form-cancel-button"
-                    id="cancel-channel-button"
-                    type="button">
-                Cancel
-            </button>
+            <button class="form-button form-save-button" id="save-channel-button"
+                    type="button">Preview channel</button>
+            <button class="form-button form-cancel-button" id="cancel-channel-button"
+                    type="button">Cancel</button>
         </div>
+        <div id="channel-discovery-status" role="status" aria-live="polite"></div>
+        <div id="channel-discovery-preview" aria-live="polite"></div>
     `;
-
     videoList.prepend(form);
-
-    document
-        .getElementById("save-channel-button")
-        ?.addEventListener(
-            "click",
-            connectYouTubeChannel
-        );
-
-    document
-        .getElementById("cancel-channel-button")
-        ?.addEventListener(
-            "click",
-            updateContent
-        );
+    channelDiscoveryPreview = null;
+    channelDiscoveryRequest++;
+    form.querySelector("#channel-url-input")?.addEventListener("input", () => {
+        channelDiscoveryRequest++;
+        channelDiscoveryPreview = null;
+        form.querySelector("#channel-discovery-preview").replaceChildren();
+        form.querySelector("#channel-discovery-status").textContent = "";
+        const btn = form.querySelector("#save-channel-button");
+        if (btn && !channelFollowInProgress) {
+            btn.disabled = false;
+            btn.textContent = "Preview channel";
+        }
+    });
+    form.querySelector("#save-channel-button")?.addEventListener("click", previewYouTubeChannel);
+    form.querySelector("#cancel-channel-button")?.addEventListener("click", () => {
+        channelDiscoveryRequest++;
+        channelDiscoveryPreview = null;
+        updateContent();
+    });
+    form.querySelector("#channel-url-input")?.addEventListener("keydown", event => {
+        if (event.key === "Enter" && !event.isComposing) {
+            event.preventDefault();
+            void previewYouTubeChannel();
+        }
+    });
 }
 
-/* =========================================
-   CONNECT CHANNEL
-   ========================================= */
+function showChannelDiscoveryMessage(message, isError = false) {
+    const target = document.getElementById("channel-discovery-status");
+    if (!target) return;
+    target.textContent = message;
+    target.classList.toggle("channel-discovery-error", isError);
+}
 
-async function connectYouTubeChannel() {
+async function previewYouTubeChannel() {
     if (!canModifyLibrary()) return;
-    const urlInput =
-        document.getElementById("channel-url-input");
-
-    const apiKeyInput =
-        document.getElementById("youtube-api-key-input");
-
-    if (!urlInput) return;
-
-    const url = urlInput.value.trim();
-
-    if (!url) {
-        alert("Please enter a YouTube channel URL.");
+    if (channelFollowInProgress) return;
+    const form = document.getElementById("channel-discovery-form");
+    const input = form?.querySelector("#channel-url-input");
+    const button = form?.querySelector("#save-channel-button");
+    if (!input || !button) return;
+    const originalInput = input.value.trim();
+    const parsed = parseYouTubeChannelUrl(originalInput);
+    channelDiscoveryPreview = null;
+    form.querySelector("#channel-discovery-preview").replaceChildren();
+    if (!parsed.valid) {
+        showChannelDiscoveryMessage(
+            "Use a YouTube @handle, channel URL, channel ID or video link. " +
+            "Unsupported /c/ links can be replaced with the channel's @handle.", true);
         return;
     }
-
-    const parsedUrl = parseYouTubeChannelUrl(url);
-
-    if (!parsedUrl.valid) {
-        alert("Please enter a valid YouTube channel URL.");
-        return;
-    }
-
-    if (!getApiKey() && apiKeyInput) {
-        const enteredKey = apiKeyInput.value.trim();
-
-        if (!enteredKey) {
-            alert("Please enter your YouTube API key.");
+    const keyInput = form.querySelector("#youtube-api-key-input");
+    if (!getApiKey() && keyInput) {
+        const entered = keyInput.value.trim();
+        if (!entered) {
+            showChannelDiscoveryMessage("Enter your YouTube API key first.", true);
             return;
         }
-
-        saveApiKey(enteredKey);
-    }
-
-    const button =
-        document.getElementById("save-channel-button");
-
-    if (button) {
-        button.disabled = true;
-        button.textContent = "Connecting...";
-    }
-
-    try {
-        const channel =
-            await findYouTubeChannel(parsedUrl);
-
-        const latestVideos =
-            await loadChannelVideos(channel);
-
-        const channelId = channel.id;
-
-        const channelName =
-            channel?.snippet?.title ||
-            "YouTube Channel";
-
-        const uploadsPlaylistId =
-            channel?.contentDetails
-                ?.relatedPlaylists
-                ?.uploads || "";
-
-        const channelUrl =
-            `https://www.youtube.com/channel/${channelId}`;
-
-        const newChannel = {
-            id: channelId,
-            name: channelName,
-            url: channelUrl,
-            originalUrl: url,
-            uploadsPlaylistId,
-            thumbnail:
-                channel?.snippet?.thumbnails?.medium?.url ||
-                channel?.snippet?.thumbnails?.default?.url ||
-                "",
-            verified: true,
-            addedAt: new Date().toISOString(),
-            lastUpdated: formatDateTime(new Date())
-        };
-
-        const existingIndex = channels.findIndex(
-            item => item.id === channelId
-        );
-
-        if (existingIndex >= 0) {
-            channels[existingIndex] = {
-                ...channels[existingIndex],
-                ...newChannel
-            };
-        } else {
-            channels.push(newChannel);
+        try { saveApiKey(entered); }
+        catch (error) {
+            showChannelDiscoveryMessage("Cannot save the API key in this browser.", true);
+            return;
         }
-
-        saveChannels();
-
-        // On the first follow, existing uploads form a baseline (not NEW).
-        // Reconnecting an already followed channel can discover new uploads.
-        const firstTimeFollowing = existingIndex === -1;
-        let newVideosFound = 0;
-
-        latestVideos.forEach(video => {
-            const existed = videos.some(
-                existing => existing.id === video.id
-            );
-
-            mergeVideo(video, !firstTimeFollowing);
-
-            if (!existed && !firstTimeFollowing) newVideosFound++;
+    }
+    if (navigator.onLine === false) {
+        showChannelDiscoveryMessage("Connect to the internet to preview a channel.", true);
+        return;
+    }
+    const request = ++channelDiscoveryRequest;
+    button.disabled = true;
+    button.textContent = "Looking up…";
+    showChannelDiscoveryMessage("Checking YouTube…");
+    try {
+        const channel = await findYouTubeChannel(parsed);
+        // Never show or save a stale result after editing or leaving the form.
+        if (request !== channelDiscoveryRequest || !form.isConnected ||
+            input.value.trim() !== originalInput) return;
+        const channelId = channel?.id || "";
+        if (!/^UC[A-Za-z0-9_-]{22}$/.test(channelId)) {
+            throw new Error("CHANNEL_NOT_FOUND");
+        }
+        channelDiscoveryPreview = { channel, originalInput };
+        const existing = channels.some(item => item.id === channelId);
+        const snippet = channel.snippet || {};
+        const thumbnail = snippet.thumbnails?.medium?.url ||
+            snippet.thumbnails?.default?.url || "";
+        const description = String(snippet.description || "").trim().slice(0, 300);
+        const box = form.querySelector("#channel-discovery-preview");
+        box.innerHTML = `
+            <section class="channel-discovery-card" aria-label="Channel preview">
+                <div class="channel-discovery-heading">
+                    ${thumbnail ? `<img src="${escapeHtml(thumbnail)}" alt="" class="channel-discovery-avatar">` : ""}
+                    <div class="channel-discovery-identity">
+                        <strong>${escapeHtml(snippet.title || "YouTube channel")}</strong>
+                        <span>${existing ? "✓ Already following" : "Ready to follow"}</span>
+                    </div>
+                </div>
+                ${description ? `<p class="channel-discovery-description">${escapeHtml(description)}</p>` : ""}
+                <p class="channel-discovery-hint">${existing
+                    ? "This channel is already in your list. No duplicate will be created."
+                    : "Preview only — nothing has been saved yet."}</p>
+                <button type="button" class="form-button form-save-button"
+                        id="confirm-add-channel-button">${existing
+                            ? "View followed channel" : "Follow this channel"}</button>
+            </section>`;
+        box.querySelector("#confirm-add-channel-button")?.addEventListener("click", () => {
+            if (existing) {
+                channelDiscoveryRequest++;
+                channelDiscoveryPreview = null;
+                activeChannelId = channelId;
+                activeChannelVideoFilter = "all";
+                updateContent();
+            } else {
+                void followPreviewedChannel();
+            }
         });
+        showChannelDiscoveryMessage(existing ? "Already in Channels." : "Channel found. Review it, then tap Follow.");
+    } catch (error) {
+        if (request !== channelDiscoveryRequest || !form.isConnected) return;
+        console.warn("Channel preview failed:", error);
+        showChannelDiscoveryMessage(error.message === "CHANNEL_NOT_FOUND"
+            ? "YouTube could not find that channel or video. Check the link."
+            : error.message === "quotaExceeded" ? "YouTube API quota exceeded. Try again tomorrow."
+            : error.message === "NO_API_KEY" ? "YouTube API key is missing."
+            : error.message === "keyInvalid" ? "The API key was rejected. Open Settings to save a valid key."
+            : error.message === "forbidden" ? "YouTube rejected this request. Check your API key restrictions in Settings."
+            : "Could not look up this channel. Check the connection or API key.", true);
+        if (error.message === "keyInvalid") removeApiKey();
+    } finally {
+        if (request === channelDiscoveryRequest && form.isConnected) {
+            button.disabled = false;
+            button.textContent = "Preview channel";
+        }
+    }
+}
 
-        sortVideos();
-        saveVideos();
-        saveLastRefreshTime();
-
-        currentPage = "new";
-        saveCurrentPage();
-
+async function followPreviewedChannel() {
+    if (!canModifyLibrary() || channelFollowInProgress) return;
+    const form = document.getElementById("channel-discovery-form");
+    const preview = channelDiscoveryPreview;
+    const input = form?.querySelector("#channel-url-input");
+    const button = form?.querySelector("#confirm-add-channel-button");
+    if (!preview || !input || !button || input.value.trim() !== preview.originalInput) return;
+    const channel = preview.channel;
+    const channelId = channel.id;
+    if (channels.some(item => item.id === channelId)) {
+        showChannelDiscoveryMessage("This channel is already followed.");
+        return;
+    }
+    if (refreshInProgress) {
+        showChannelDiscoveryMessage("Finish the current Refresh before following a channel.", true);
+        return;
+    }
+    channelFollowInProgress = true;
+    button.disabled = true;
+    button.textContent = "Adding…";
+    showChannelDiscoveryMessage("Loading recent uploads…");
+    try {
+        const latestVideos = await loadChannelVideos(channel);
+        if (!form.isConnected || channelDiscoveryPreview !== preview ||
+            input.value.trim() !== preview.originalInput) return;
+        // Fetch first, then commit. A storage failure must not leave a partially
+        // followed channel or overwrite any existing video states.
+        const beforeVideos = videos.map(video => ({ ...video }));
+        const beforeChannels = channels.map(item => ({ ...item }));
+        const rawVideos = localStorage.getItem(VIDEO_STORAGE_KEY);
+        const rawChannels = localStorage.getItem(CHANNEL_STORAGE_KEY);
+        let attemptedWrite = false;
+        try {
+            channels.push({
+                id: channelId,
+                name: channel?.snippet?.title || "YouTube channel",
+                url: `https://www.youtube.com/channel/${channelId}`,
+                originalUrl: preview.originalInput,
+                uploadsPlaylistId: channel?.contentDetails?.relatedPlaylists?.uploads || "",
+                thumbnail: channel?.snippet?.thumbnails?.medium?.url ||
+                    channel?.snippet?.thumbnails?.default?.url || "",
+                verified: true,
+                addedAt: new Date().toISOString(),
+                lastUpdated: formatDateTime(new Date())
+            });
+            // Initial uploads are a baseline, not new notifications.
+            latestVideos.forEach(video => mergeVideo(video, false));
+            sortVideos();
+            attemptedWrite = true;
+            saveVideos();
+            saveChannels();
+        } catch (error) {
+            videos = beforeVideos;
+            channels = beforeChannels;
+            if (attemptedWrite) {
+                try {
+                    if (rawVideos === null) localStorage.removeItem(VIDEO_STORAGE_KEY);
+                    else localStorage.setItem(VIDEO_STORAGE_KEY, rawVideos);
+                    if (rawChannels === null) localStorage.removeItem(CHANNEL_STORAGE_KEY);
+                    else localStorage.setItem(CHANNEL_STORAGE_KEY, rawChannels);
+                } catch (recoveryError) {
+                    storageIntegrityIssue = "channel follow storage recovery failed";
+                    console.error("Could not restore channel storage:", recoveryError);
+                    showStorageIntegrityWarning();
+                    throw new Error("STORAGE_RECOVERY_FAILED");
+                }
+            }
+            throw error;
+        }
+        // Following one channel does not mark every channel as refreshed.
+        channelDiscoveryRequest++;
+        channelDiscoveryPreview = null;
+        currentPage = "channels";
+        activeChannelId = channelId;
+        activeChannelVideoFilter = "all";
+        try { saveCurrentPage(); } catch (error) { console.warn("Could not save current page", error); }
         updateNavigation();
         updateContent();
-
-        const summary = firstTimeFollowing
-            ? `${latestVideos.length} recent videos loaded.\n` +
-              `Older uploads are under Recent videos, not NEW.\n` +
-              `Future uploads will be marked NEW.`
-            : `${latestVideos.length} recent videos loaded.\n` +
-              `${newVideosFound} new videos found.`;
-
-        alert(`Connected to "${channelName}".\n\n${summary}`);
+        alert(`Following "${channel?.snippet?.title || "YouTube channel"}".\n\n` +
+            `${latestVideos.length} recent videos loaded.\n` +
+            `Older uploads are not marked NEW. Future uploads will be marked NEW.`);
     } catch (error) {
-        console.log(
-            "Connect channel error:",
-            error
-        );
-
-        showYouTubeError(error);
+        console.warn("Could not follow channel:", error);
+        showChannelDiscoveryMessage(error.message === "STORAGE_RECOVERY_FAILED"
+            ? "Storage recovery failed. Stop editing and restore your last JSON Backup."
+            : error.message === "UPLOADS_PLAYLIST_NOT_FOUND"
+                ? "YouTube did not provide an uploads playlist for this channel."
+                : "Could not add this channel. Your previous library has been kept. Check the internet and storage.", true);
     } finally {
-        if (button) {
+        channelFollowInProgress = false;
+        if (button.isConnected) {
             button.disabled = false;
-            button.textContent = "Find channel";
+            button.textContent = "Follow this channel";
         }
     }
 }

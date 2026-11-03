@@ -1,7 +1,7 @@
 /* My YouTube PWA 1.3.8 — resilient offline navigation.
    Only fixed app assets are cached. YouTube videos and API responses are never cached.
    Keep Share Receiver navigation working offline, including Android Share query parameters. */
-const CACHE_NAME = 'my-youtube-shell-20261103-brave-1-4-6';
+const CACHE_NAME = 'my-youtube-shell-20261103-discovery-1-4-7';
 const BASE = new URL(self.registration.scope);
 const OFFLINE_PAGE = new URL('index.html', BASE).href;
 const SHARE_PAGE = new URL('share.html', BASE).href;
@@ -11,12 +11,12 @@ const SHELL = [
   './index.html',
   './share.html',
   './style.css',
-  './youtube-utils.js?v=20261102-maintenance-1-3-6',
+  './youtube-utils.js?v=20261103-discovery-1-4-7',
   './youtube-api.js?v=20261102-maintenance-1-3-6',
   './library-storage.js?v=20261102-maintenance-1-3-6',
   './backup-manager.js?v=20261102-maintenance-1-3-6',
   './ui-navigation.js?v=20261103-saved-1-4-3',
-  './app.js?v=20261103-brave-1-4-6',
+  './app.js?v=20261103-discovery-1-4-7',
   './pwa.js?v=20261102-maintenance-1-3-6',
   './manifest.webmanifest?v=20261102-pwa2',
   './icon-192.png',
