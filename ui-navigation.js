@@ -168,6 +168,24 @@ function updateContent() {
                     </select>
                 </label>
             </div>
+            ${currentPage === "saved" ? `
+                <p id="saved-library-overview" class="saved-library-overview"></p>
+                <div class="library-filter-grid saved-extra-filters" aria-label="Saved library filters">
+                    <label for="saved-watch-filter">Watch status
+                        <select id="saved-watch-filter">
+                            <option value="all" ${prefs.savedWatch === "all" ? "selected" : ""}>All saved</option>
+                            <option value="unwatched" ${prefs.savedWatch === "unwatched" ? "selected" : ""}>Not watched</option>
+                            <option value="watched" ${prefs.savedWatch === "watched" ? "selected" : ""}>Watched</option>
+                        </select>
+                    </label>
+                    <label for="saved-queue-filter">Watch Queue
+                        <select id="saved-queue-filter">
+                            <option value="all" ${prefs.savedQueue === "all" ? "selected" : ""}>Any Queue status</option>
+                            <option value="queued" ${prefs.savedQueue === "queued" ? "selected" : ""}>Already in Queue</option>
+                            <option value="notqueued" ${prefs.savedQueue === "notqueued" ? "selected" : ""}>Not in Queue</option>
+                        </select>
+                    </label>
+                </div>` : ""}
             <div class="library-tool-actions">
                 <button type="button" id="library-open-queue" class="library-queue-shortcut">▶ Watch Queue (${watchQueue.length})</button>
                 <button id="library-compact-toggle" type="button"
@@ -196,7 +214,11 @@ function updateContent() {
                             '<button type="button" data-bulk-action="save">★ Save</button>'}
                         <button type="button" data-bulk-action="queue">＋ Add to Queue</button>
                         <button type="button" data-bulk-action="hide" class="bulk-hide-action">◌ Hide</button>
+                        ${currentPage === "saved" ? `
+                            <button type="button" data-bulk-action="copy">⧉ Copy links</button>
+                            <button type="button" data-bulk-action="download">↓ Download .txt</button>` : ""}
                     </div>
+                    ${currentPage === "saved" ? '<p id="saved-bulk-message" class="saved-bulk-feedback" role="status" aria-live="polite"></p>' : ""}
                     <p class="library-bulk-note">Only videos shown with the current filters are selected.
                         Hidden videos can be restored in Settings.</p>
                 </div>

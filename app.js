@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Feature release 1.4.2 (2026-11-03)
+   Feature release 1.4.3 (2026-11-03)
    Helpers in youtube-utils.js; API in youtube-api.js; storage in library-storage.js; backup in backup-manager.js; UI in ui-navigation.js.
    Preserves existing storage keys and app features.
 
@@ -102,7 +102,10 @@ function saveHomeLayout() {
 const LIBRARY_VIEW_KEY = "my-youtube-library-view-v1";
 const LIBRARY_PAGES = ["new", "saved", "watched"];
 const LIBRARY_SORTS = ["newest", "oldest", "longest", "shortest"];
-const LIBRARY_DEFAULT_VIEW = { query: "", channel: "", sort: "newest", compact: false };
+// Extra Saved-only view controls are cosmetic. No video metadata or Backup migration.
+const SAVED_WATCH_FILTERS = ["all", "unwatched", "watched"];
+const SAVED_QUEUE_FILTERS = ["all", "queued", "notqueued"];
+const LIBRARY_DEFAULT_VIEW = { query: "", channel: "", sort: "newest", compact: false, savedWatch: "all", savedQueue: "all" };
 function loadLibraryViewPrefs() {
     let stored = {};
     try {
@@ -117,7 +120,9 @@ function loadLibraryViewPrefs() {
             query: typeof value.query === "string" ? value.query.slice(0, 150) : "",
             channel: typeof value.channel === "string" ? value.channel : "",
             sort: LIBRARY_SORTS.includes(value.sort) ? value.sort : "newest",
-            compact: value.compact === true
+            compact: value.compact === true,
+            savedWatch: SAVED_WATCH_FILTERS.includes(value.savedWatch) ? value.savedWatch : "all",
+            savedQueue: SAVED_QUEUE_FILTERS.includes(value.savedQueue) ? value.savedQueue : "all"
         }];
     }));
 }
@@ -234,6 +239,7 @@ let homeEditorOpen = false;
 // Bulk selection is temporary UI state. Individual video states are saved as usual.
 let librarySelectMode = false;
 let librarySelectedIds = new Set();
+let savedBulkMessage = "";
 // In-memory navigation only. No extra storage or backup fields are needed.
 let activeChannelId = null;
 let activeChannelVideoFilter = "all";
@@ -2074,7 +2080,12 @@ function libraryVideoMatches(video, prefs) {
     const titleAndChannel = `${video.title || ""} ${video.channel || ""}`.toLocaleLowerCase();
     const matchesText = !query || titleAndChannel.includes(query);
     const matchesChannel = !prefs.channel || (video.channel || "Unknown channel") === prefs.channel;
-    return matchesText && matchesChannel;
+    if (currentPage !== "saved") return matchesText && matchesChannel;
+    const matchesWatched = prefs.savedWatch === "watched" ? Boolean(video.watched)
+        : prefs.savedWatch === "unwatched" ? !video.watched : true;
+    const matchesQueue = prefs.savedQueue === "queued" ? isQueued(video.id)
+        : prefs.savedQueue === "notqueued" ? !isQueued(video.id) : true;
+    return matchesText && matchesChannel && matchesWatched && matchesQueue;
 }
 
 function renderLibraryResults() {
@@ -2096,10 +2107,19 @@ function renderLibraryResults() {
         recent.filter(video => libraryVideoMatches(video, prefs)), prefs.sort);
     const showing = filteredPrimary.length + filteredRecent.length;
     const total = primary.length + recent.length;
-    const isFiltered = Boolean(prefs.query.trim() || prefs.channel);
+    const isFiltered = Boolean(prefs.query.trim() || prefs.channel ||
+        (currentPage === "saved" && (prefs.savedWatch !== "all" || prefs.savedQueue !== "all")));
 
     summary.textContent = `Showing ${showing} of ${total} video${total === 1 ? "" : "s"}` +
         (currentPage === "new" ? " · includes recent channel uploads" : "");
+    if (currentPage === "saved") {
+        const counter = document.getElementById("saved-library-overview");
+        if (counter) {
+            const awaiting = primary.filter(video => !video.watched).length;
+            const queued = primary.filter(video => isQueued(video.id)).length;
+            counter.textContent = `${primary.length} saved · ${awaiting} not watched · ${queued} in Queue`;
+        }
+    }
     results.classList.toggle("is-compact", prefs.compact);
 
     const displayedIds = new Set([...filteredPrimary, ...filteredRecent].map(video => video.id));
@@ -2163,6 +2183,8 @@ function updateLibrarySelectionToolbar() {
     document.querySelectorAll("#library-bulk-panel [data-bulk-action]").forEach(button => {
         button.disabled = count === 0;
     });
+    const feedback = document.getElementById("saved-bulk-message");
+    if (feedback) feedback.textContent = savedBulkMessage;
 }
 
 function updateLibraryCardSelection(checkbox) {
@@ -2176,7 +2198,73 @@ function updateLibraryCardSelection(checkbox) {
     updateLibrarySelectionToolbar();
 }
 
+// Saved export follows the CURRENT visible order (search, channel and sorting).
+// This never sends a request to YouTube or changes the library.
+function selectedSavedLinks() {
+    if (currentPage !== "saved" || !librarySelectMode) return [];
+    return [...document.querySelectorAll("#library-results .video-card[data-video-id]")]
+        .map(card => card.dataset.videoId)
+        .filter(id => librarySelectedIds.has(id))
+        .map(id => getYouTubeVideoLink(id))
+        .filter(Boolean);
+}
+
+async function copySelectedSavedLinks() {
+    const links = selectedSavedLinks();
+    if (!links.length) return;
+    const content = links.join("\n");
+    let copied = false;
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(content);
+            copied = true;
+        }
+    } catch (error) { console.warn("Clipboard permission unavailable", error); }
+    if (!copied) {
+        const input = document.createElement("textarea");
+        input.value = content;
+        input.readOnly = true;
+        input.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+        document.body.appendChild(input);
+        input.focus();
+        input.select();
+        try { copied = Boolean(document.execCommand("copy")); }
+        catch (error) { console.warn("Clipboard fallback unavailable", error); }
+        finally { input.remove(); }
+    }
+    savedBulkMessage = copied
+        ? `Copied ${links.length} selected YouTube link${links.length === 1 ? "" : "s"}.`
+        : "Clipboard access blocked. Use Download .txt instead.";
+    updateLibrarySelectionToolbar();
+}
+
+function downloadSelectedSavedLinks() {
+    const links = selectedSavedLinks();
+    if (!links.length) return;
+    let blobUrl;
+    try {
+        blobUrl = URL.createObjectURL(new Blob([links.join("\n") + "\n"],
+            { type: "text/plain;charset=utf-8" }));
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = `my-youtube-saved-links-${new Date().toISOString().slice(0,10)}.txt`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        savedBulkMessage = `Prepared ${links.length} selected link${links.length === 1 ? "" : "s"} for download.`;
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+    } catch (error) {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        savedBulkMessage = "Could not create the .txt file. Try Copy links instead.";
+        console.warn("Saved links download failed", error);
+    }
+    updateLibrarySelectionToolbar();
+}
+
 function applyLibraryBulkAction(action) {
+    // Non-mutating Saved exports work even if the browser's local data is read-only.
+    if (currentPage === "saved" && action === "copy") { void copySelectedSavedLinks(); return; }
+    if (currentPage === "saved" && action === "download") { downloadSelectedSavedLinks(); return; }
     if (!canModifyLibrary()) return;
     if (!librarySelectMode || !LIBRARY_PAGES.includes(currentPage)) return;
     const allowed = {
@@ -2189,66 +2277,61 @@ function applyLibraryBulkAction(action) {
         .map(input => input.value));
     const chosen = videos.filter(video =>
         !video.hidden && displayedIds.has(video.id) && librarySelectedIds.has(video.id));
-    if (chosen.length === 0) return;
+    if (!chosen.length) return;
+    const n = chosen.length;
     if (action === "hide" && !window.confirm(
-        `Hide ${chosen.length} selected video${chosen.length === 1 ? "" : "s"}? You can restore them in Settings → Hidden videos.`
+        `Hide ${n} selected video${n === 1 ? "" : "s"}? You can restore them in Settings → Hidden videos.`
+    )) return;
+    if (action === "unsave" && !window.confirm(
+        `Remove ${n} selected video${n === 1 ? "" : "s"} from Saved? Videos remain in your library and can be saved again.`
     )) return;
 
+    const chosenIds = new Set(chosen.map(video => video.id));
+    let nextQueue = watchQueue.slice();
+    let nextVideos = videos;
     if (action === "queue") {
         const additional = chosen.filter(video => !isQueued(video.id)).map(video => video.id);
         if (additional.length > WATCH_QUEUE_LIMIT - watchQueue.length) {
             alert(`Watch Queue can hold up to ${WATCH_QUEUE_LIMIT} videos.`);
             return;
         }
-        if (!additional.length) {
-            librarySelectedIds.clear();
-            librarySelectMode = false;
-            updateContent();
-            return;
+        if (additional.length) nextQueue = [...watchQueue, ...additional];
+    } else {
+        nextVideos = videos.map(video => {
+            if (!chosenIds.has(video.id)) return video;
+            if (action === "watched") return { ...video, watched: true, isNew: false };
+            if (action === "unwatched") return { ...video, watched: false };
+            if (action === "save") return { ...video, saved: true };
+            if (action === "unsave") return { ...video, saved: false };
+            if (action === "hide") return { ...video, hidden: true };
+            return video;
+        });
+        // Preserve the existing behaviour: Watched / Hidden leaves Watch Queue.
+        if (action === "watched" || action === "hide") {
+            nextQueue = watchQueue.filter(id => !chosenIds.has(id));
         }
-        try {
-            commitWatchQueue([...watchQueue, ...additional], videos);
-        } catch (error) {
-            alert("Could not save the queue. Check available Chrome storage.");
-            return;
-        }
-        librarySelectedIds.clear();
-        librarySelectMode = false;
-        updateContent();
+    }
+    try {
+        // Save Videos and Queue together; roll back both keys on a failed write.
+        if (nextQueue !== watchQueue || nextVideos !== videos) commitWatchQueue(nextQueue, nextVideos);
+    } catch (error) {
+        console.error("Saved library bulk operation failed", error);
+        savedBulkMessage = "Could not save changes. Previous videos and Queue were kept. Check Chrome storage.";
+        updateLibrarySelectionToolbar();
         return;
     }
-    for (const video of chosen) {
-        if (action === "watched") {
-            video.watched = true;
-            video.isNew = false;
-        } else if (action === "unwatched") {
-            video.watched = false;
-            // Previously watched videos do not become NEW automatically.
-        } else if (action === "save") {
-            video.saved = true;
-        } else if (action === "unsave") {
-            video.saved = false;
-        } else if (action === "hide") {
-            video.hidden = true;
-        }
-    }
-    // Hidden videos must no longer appear in the queue.
-    if (action === "hide" || action === "watched") {
-        watchQueue = watchQueue.filter(id => !chosen.some(video => video.id === id));
-        saveWatchQueue();
-    }
-    // One storage write for the whole group; no extra API calls.
-    saveVideos();
     librarySelectedIds.clear();
     librarySelectMode = false;
+    savedBulkMessage = "";
     updateContent();
     const status = document.getElementById("library-results-summary");
     if (status) {
         const actionLabels = {
             watched: "Marked as watched", unwatched: "Marked as unwatched",
-            save: "Saved", unsave: "Removed from Saved", hide: "Hidden"
+            save: "Saved", unsave: "Removed from Saved", hide: "Hidden",
+            queue: "Added to Watch Queue"
         };
-        status.textContent = `${actionLabels[action]}: ${chosen.length} video${chosen.length === 1 ? "" : "s"}.`;
+        status.textContent = `${actionLabels[action]}: ${n} video${n === 1 ? "" : "s"}.`;
     }
 }
 
@@ -2260,12 +2343,15 @@ function setupLibraryControls() {
     const sort = document.getElementById("library-filter-sort");
     const compact = document.getElementById("library-compact-toggle");
     const clear = document.getElementById("library-clear-filters");
+    const savedWatch = document.getElementById("saved-watch-filter");
+    const savedQueue = document.getElementById("saved-queue-filter");
     const selectToggle = document.getElementById("library-select-toggle");
     const selectAll = document.getElementById("library-select-all");
     const clearSelection = document.getElementById("library-clear-selection");
 
     document.getElementById("library-open-queue")?.addEventListener("click", () => navigateToPage("queue"));
     selectToggle?.addEventListener("click", () => {
+        savedBulkMessage = "";
         librarySelectMode = !librarySelectMode;
         librarySelectedIds.clear();
         renderLibraryResults();
@@ -2298,6 +2384,16 @@ function setupLibraryControls() {
         saveLibraryViewPrefs();
         renderLibraryResults(); // Keep the input and keyboard in place.
     });
+    savedWatch?.addEventListener("change", event => {
+        prefs.savedWatch = SAVED_WATCH_FILTERS.includes(event.target.value) ? event.target.value : "all";
+        saveLibraryViewPrefs();
+        renderLibraryResults();
+    });
+    savedQueue?.addEventListener("change", event => {
+        prefs.savedQueue = SAVED_QUEUE_FILTERS.includes(event.target.value) ? event.target.value : "all";
+        saveLibraryViewPrefs();
+        renderLibraryResults();
+    });
     channel?.addEventListener("change", event => {
         prefs.channel = event.target.value;
         saveLibraryViewPrefs();
@@ -2318,6 +2414,10 @@ function setupLibraryControls() {
     clear?.addEventListener("click", () => {
         prefs.query = "";
         prefs.channel = "";
+        prefs.savedWatch = "all";
+        prefs.savedQueue = "all";
+        if (savedWatch) savedWatch.value = "all";
+        if (savedQueue) savedQueue.value = "all";
         search.value = "";
         channel.value = "";
         saveLibraryViewPrefs();
