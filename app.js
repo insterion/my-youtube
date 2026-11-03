@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Feature release 1.4.3 (2026-11-03)
+   Feature release 1.4.5 (2026-11-03)
    Helpers in youtube-utils.js; API in youtube-api.js; storage in library-storage.js; backup in backup-manager.js; UI in ui-navigation.js.
    Preserves existing storage keys and app features.
 
@@ -1640,7 +1640,7 @@ function renderSmartFeedPage() {
                 <button type="button" id="smart-feed-home">← Home</button>
                 <button type="button" id="smart-feed-channels">Channels</button>
                 <button type="button" id="smart-feed-refresh" ${refreshInProgress || !channels.length ? "disabled" : ""}>
-                    ${refreshInProgress ? "Refreshing…" : "↻ Refresh channels"}
+                    ${refreshInProgress ? "Refreshing…" : smartFeedPrefs.channelId ? "↻ Refresh selected channel" : "↻ Refresh all channels"}
                 </button>
             </div>
         </section>
@@ -1694,7 +1694,11 @@ function renderSmartFeedPage() {
     document.getElementById("smart-feed-home")?.addEventListener("click", () => navigateToPage("home"));
     document.getElementById("smart-feed-channels")?.addEventListener("click", () => navigateToPage("channels"));
     document.getElementById("smart-feed-queue")?.addEventListener("click", () => navigateToPage("queue"));
-    document.getElementById("smart-feed-refresh")?.addEventListener("click", () => refreshAllChannels(false));
+    document.getElementById("smart-feed-refresh")?.addEventListener("click", () => {
+        if (smartFeedPrefs.channelId) void refreshSingleChannel(smartFeedPrefs.channelId);
+        else void refreshAllChannels(false);
+    });
+    updateSmartFeedRefreshButton();
     const rulesBox = document.getElementById("smart-feed-rules");
     rulesBox?.addEventListener("toggle", () => { smartFeedRulesOpen = rulesBox.open; });
     const updateField = (elementId, prop, convert = value => value) => {
@@ -1705,6 +1709,7 @@ function renderSmartFeedPage() {
             smartFeedPrefs[prop] = next;
             saveSmartFeedPrefs();
             updateSmartFeedResults();
+            if (prop === "channelId") updateSmartFeedRefreshButton();
         });
     };
     const parseMinutes = value => {
@@ -3688,6 +3693,95 @@ async function refreshAllChannels(silent = false) {
     }
 }
 
+/* Refreshing a single channel doesn't reset the hourly all-channels timer.
+   This saves API quota without falsely reporting that every channel was checked. */
+async function refreshSingleChannel(channelId) {
+    if (refreshInProgress) return;
+    if (storageIntegrityIssue) {
+        alert("Restore a valid backup before refreshing: saved data needs recovery.");
+        return;
+    }
+    const channel = channels.find(item => item.id === channelId);
+    if (!channel) {
+        alert("That channel is no longer followed.");
+        return;
+    }
+    if (!getApiKey()) {
+        alert("No YouTube API key has been saved.");
+        return;
+    }
+    if (navigator.onLine === false) {
+        alert("You are offline. Reconnect to refresh this channel.");
+        return;
+    }
+
+    refreshInProgress = true;
+    updateRefreshButtons(true);
+    let previousVideos = null;
+    let previousChannels = null;
+    let previousVideoData = null;
+    let previousChannelData = null;
+    let writeAttempted = false;
+    try {
+        const latestVideos = await loadVideosFromSavedChannel(channel);
+        // Fetch first. Existing Watched, Saved, NEW and Queue state must survive.
+        previousVideos = videos.map(video => ({ ...video }));
+        previousChannels = channels.map(item => ({ ...item }));
+        previousVideoData = localStorage.getItem(VIDEO_STORAGE_KEY);
+        previousChannelData = localStorage.getItem(CHANNEL_STORAGE_KEY);
+        const knownIds = new Set(videos.map(video => video.id));
+        let newVideos = 0;
+        latestVideos.forEach(video => {
+            if (!knownIds.has(video.id)) { newVideos++; knownIds.add(video.id); }
+            mergeVideo(video);
+        });
+        channel.lastUpdated = formatDateTime(new Date());
+        sortVideos();
+        writeAttempted = true;
+        saveVideos();
+        saveChannels();
+        updateContent();
+        alert(`Refreshed "${channel.name}".\n\n` +
+            `Videos received: ${latestVideos.length}\n` +
+            `New videos found: ${newVideos}\n\n` +
+            "Other channels were not checked.");
+    } catch (error) {
+        console.warn("Could not refresh single channel:", error);
+        if (previousVideos !== null) {
+            videos = previousVideos;
+            channels = previousChannels;
+            // If the second write fails, try to restore the original persisted data.
+            if (writeAttempted) {
+                try {
+                    if (previousVideoData === null) localStorage.removeItem(VIDEO_STORAGE_KEY);
+                    else localStorage.setItem(VIDEO_STORAGE_KEY, previousVideoData);
+                    if (previousChannelData === null) localStorage.removeItem(CHANNEL_STORAGE_KEY);
+                    else localStorage.setItem(CHANNEL_STORAGE_KEY, previousChannelData);
+                } catch (restoreError) {
+                    console.error("Restoring saved channel refresh data failed:", restoreError);
+                    alert("Storage recovery failed. Avoid further changes and restore your last JSON Backup.");
+                    storageIntegrityIssue = "channel refresh storage recovery failed";
+                }
+            }
+            updateContent();
+        }
+        alert("Could not refresh this channel. Your existing video states were not intentionally changed. Check the connection and API quota, then try again.");
+    } finally {
+        refreshInProgress = false;
+        updateRefreshButtons(false);
+    }
+}
+
+function updateSmartFeedRefreshButton() {
+    const button = document.getElementById("smart-feed-refresh");
+    if (!button) return;
+    const selected = channels.find(channel => channel.id === smartFeedPrefs.channelId);
+    button.disabled = refreshInProgress || channels.length === 0;
+    button.textContent = refreshInProgress ? "Refreshing…" :
+        selected ? "↻ Refresh selected channel" : "↻ Refresh all channels";
+    button.title = selected ? `Check only ${selected.name}` : "Check all followed channels";
+}
+
 function updateRefreshButtons(refreshing) {
     const pageButton =
         document.getElementById("refresh-page-button");
@@ -3708,6 +3802,11 @@ function updateRefreshButtons(refreshing) {
                 ? "Refreshing..."
                 : "↻ Refresh All Channels";
     }
+    document.querySelectorAll("[data-refresh-channel]").forEach(button => {
+        button.disabled = refreshing;
+        button.textContent = refreshing ? "Refreshing…" : "↻ Refresh this channel";
+    });
+    updateSmartFeedRefreshButton();
 }
 
 /* =========================================
@@ -3800,6 +3899,10 @@ function renderChannelVideoDetail(channel) {
                     <p>${stats.total} videos stored on this device</p>
                 </div>
             </div>
+            <button type="button" class="channel-detail-refresh" id="channel-detail-refresh"
+                data-refresh-channel="${escapeHtml(channel.id)}" ${refreshInProgress ? "disabled" : ""}>
+                ${refreshInProgress ? "Refreshing…" : "↻ Refresh this channel"}
+            </button>
             <div class="channel-detail-filters" role="group" aria-label="Filter channel videos">
                 ${CHANNEL_VIDEO_FILTERS.map(filter => {
                     const count = filter === "all" ? stats.total : stats[filter];
@@ -3811,7 +3914,7 @@ function renderChannelVideoDetail(channel) {
                 }).join("")}
             </div>
             <p class="channel-detail-note">Only videos already found or saved by My YouTube are shown.
-                Refresh the channels to check for new uploads.</p>
+                Refresh this channel to check only its newest uploads.</p>
             <p class="channel-detail-summary" role="status">
                 Showing ${matches.length} of ${stats.total} stored video${stats.total === 1 ? "" : "s"}
             </p>
@@ -3822,12 +3925,15 @@ function renderChannelVideoDetail(channel) {
                 : `<div class="empty-state">
                     <h3>No ${filterNames[activeChannelVideoFilter].toLowerCase()} here yet</h3>
                     <p>${activeChannelVideoFilter === "all"
-                        ? "This channel has no stored videos yet. Try Refresh All Channels from the channel list."
+                        ? "This channel has no stored videos yet. Try Refresh this channel."
                         : "Choose All videos to see the other videos from this channel."}</p>
                    </div>`}
         </div>
     `;
 
+    document.getElementById("channel-detail-refresh")?.addEventListener("click", () => {
+        void refreshSingleChannel(channel.id);
+    });
     document.getElementById("channel-back-button")?.addEventListener("click", () => {
         activeChannelId = null;
         activeChannelVideoFilter = "all";
@@ -3936,6 +4042,11 @@ function createChannelCard(channel) {
                 <button class="channel-feed-button" type="button" aria-label="Open ${escapeHtml(channel.name)} in Smart Feed">Smart Feed</button>
                 <button class="channel-view-button" type="button"
                     aria-label="View stored videos from ${escapeHtml(channel.name)}">View videos</button>
+                <button class="channel-refresh-button" type="button"
+                    data-refresh-channel="${escapeHtml(channel.id)}"
+                    ${refreshInProgress ? "disabled" : ""}
+                    aria-label="Refresh only ${escapeHtml(channel.name)}">
+                    ${refreshInProgress ? "Refreshing…" : "↻ Refresh this channel"}</button>
                 <button class="channel-delete-button" type="button"
                     aria-label="Delete followed channel ${escapeHtml(channel.name)}">Delete channel</button>
             </div>
@@ -3982,6 +4093,9 @@ function setupChannelButtons() {
                 navigateToPage("feed");
             });
 
+            card.querySelector(".channel-refresh-button")?.addEventListener("click", () => {
+                void refreshSingleChannel(channelId);
+            });
             card.querySelector(".channel-delete-button")
                 ?.addEventListener("click", () => {
                     deleteChannel(channelId);
