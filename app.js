@@ -1,7 +1,7 @@
 /* =========================================
    MY YOUTUBE
    Main application logic
-   Feature release 1.4.7 (2026-11-03)
+   Feature release 1.4.8 (2026-11-09)
    Helpers in youtube-utils.js; API in youtube-api.js; storage in library-storage.js; backup in backup-manager.js; UI in ui-navigation.js.
    Preserves existing storage keys and app features.
 
@@ -625,6 +625,27 @@ function openSettings() {
                     <div><strong>${newCount}</strong><span>New</span></div>
                 </section>
 
+                <details class="settings-group" id="settings-visible-tabs" open>
+                    <summary><span>☷ Visible Tabs</span><span class="settings-group-arrow" aria-hidden="true">⌄</span></summary>
+                    <div class="settings-group-content">
+                        <p class="settings-description">Choose which tabs appear at the bottom of My YouTube.
+                            Hidden tabs and their videos are not deleted. Home always stays visible.</p>
+                        <div class="visible-tabs-grid" aria-label="Choose visible tabs">
+                            ${NAV_TAB_DEFINITIONS.map(tab => `
+                                <label class="visible-tab-option">
+                                    <input type="checkbox" data-visible-tab="${tab.id}"
+                                        ${navVisibility[tab.id] ? "checked" : ""}
+                                        ${tab.id === "home" ? "disabled" : ""}>
+                                    <span>${escapeHtml(tab.label)}${tab.id === "home" ? " (always on)" : ""}</span>
+                                </label>
+                            `).join("")}
+                        </div>
+                        <p id="visible-tabs-feedback" class="settings-description" role="status" aria-live="polite">
+                            Saved and Watched are hidden by default. You can enable them at any time.
+                        </p>
+                    </div>
+                </details>
+
                 <details class="settings-group" open>
                     <summary><span>🔗 Connection &amp; Refresh</span><span class="settings-group-arrow" aria-hidden="true">⌄</span></summary>
                     <div class="settings-group-content">
@@ -710,6 +731,21 @@ function openSettings() {
     modal.querySelector(".settings-modal")?.focus();
     renderHiddenVideosInSettings();
     document.getElementById("settings-hidden-list")?.addEventListener("click", handleHiddenVideoRestore);
+    modal.querySelectorAll("[data-visible-tab]").forEach(input => {
+        input.addEventListener("change", () => {
+            const page = input.dataset.visibleTab;
+            const enabled = input.checked;
+            const feedback = document.getElementById("visible-tabs-feedback");
+            if (!setNavTabVisible(page, enabled)) {
+                input.checked = !enabled;
+                if (feedback) feedback.textContent =
+                    "Could not save this setting. Please check that Chrome storage is available.";
+                return;
+            }
+            if (feedback) feedback.textContent = `${NAV_TAB_DEFINITIONS.find(tab => tab.id === page)?.label || page}` +
+                (enabled ? " is now shown in the navigation." : " is now hidden. No data was deleted.");
+        });
+    });
 
     document.getElementById("close-settings-button")
         ?.addEventListener("click", closeSettings);

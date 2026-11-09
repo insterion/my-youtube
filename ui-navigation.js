@@ -1,6 +1,6 @@
 /* ==============================================
    MY YOUTUBE — UI & NAVIGATION
-   Maintenance 1.3.6 (2026-11-02)
+   Navigation update 1.4.8 (2026-11-09)
 
    Existing page switching, rendering dispatch,
    library UI controls and header counter moved
@@ -13,70 +13,137 @@
    across these classic scripts.
    ============================================== */
 
-/* Saved page selection */
+/* The available pages remain available to the application even when their
+   bottom-navigation button is hidden. Hiding tabs never edits a video record. */
+const NAV_TAB_DEFINITIONS = [
+    { id: "home", label: "Home", icon: "⌂" },
+    { id: "new", label: "New", icon: "●" },
+    { id: "saved", label: "Saved", icon: "☆" },
+    { id: "watched", label: "Watched", icon: "✓" },
+    { id: "channels", label: "Channels", icon: "▣" },
+    { id: "search", label: "Search", icon: "⌕" },
+    { id: "queue", label: "Watch Queue", navLabel: "Queue", icon: "▶" },
+    { id: "feed", label: "Smart Feed", navLabel: "Feed", icon: "≋" }
+];
+const APP_PAGES = NAV_TAB_DEFINITIONS.map(tab => tab.id);
+const NAV_VISIBILITY_KEY = "my-youtube-visible-tabs-v1";
+const NAV_DEFAULT_VISIBILITY = {
+    home: true, new: true, saved: false, watched: false,
+    channels: true, search: true, queue: true, feed: true
+};
+
+function normalizeNavVisibility(value) {
+    const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return Object.fromEntries(NAV_TAB_DEFINITIONS.map(tab => [
+        tab.id, tab.id === "home" ? true :
+            (typeof raw[tab.id] === "boolean" ? raw[tab.id] : NAV_DEFAULT_VISIBILITY[tab.id])
+    ]));
+}
+
+function loadNavVisibility() {
+    try {
+        const raw = localStorage.getItem(NAV_VISIBILITY_KEY);
+        return normalizeNavVisibility(raw === null ? null : JSON.parse(raw));
+    } catch (error) {
+        console.warn("Could not read visible tab settings; using safe defaults.", error);
+        return normalizeNavVisibility(null);
+    }
+}
+
+let navVisibility = loadNavVisibility();
+
 function saveCurrentPage() {
     localStorage.setItem(PAGE_STORAGE_KEY, currentPage);
 }
 
-
-// The Home overview is the first tab. Existing pages stay in their usual order.
-// Keep this programmatic so previous index.html layouts and saved data work.
-function setupSearchNavigation() {
+function renderNavigationTabs() {
     const navigation = document.querySelector(".bottom-navigation");
     if (!navigation) return;
-
-    if (!navigation.querySelector("#home-nav-button")) {
-        const home = document.createElement("button");
-        home.id = "home-nav-button";
-        home.className = "nav-button";
-        home.type = "button";
-        home.innerHTML = '<span class="nav-icon" aria-hidden="true">⌂</span><span>Home</span>';
-        navigation.prepend(home);
-    }
-
-    if (!navigation.querySelector("#search-nav-button")) {
-        const search = document.createElement("button");
-        search.id = "search-nav-button";
-        search.className = "nav-button";
-        search.type = "button";
-        search.innerHTML = '<span class="nav-icon" aria-hidden="true">⌕</span><span>Search</span>';
-        navigation.appendChild(search);
-    }
-    navigation.style.gridTemplateColumns = "repeat(6, minmax(0, 1fr))";
+    navigation.setAttribute("aria-label", "Main navigation");
+    const visible = NAV_TAB_DEFINITIONS.filter(tab => navVisibility[tab.id]);
+    const fragment = document.createDocumentFragment();
+    visible.forEach(tab => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "nav-button";
+        button.dataset.appPage = tab.id;
+        button.id = `${tab.id}-nav-button`;
+        button.setAttribute("aria-label", tab.label);
+        const icon = document.createElement("span");
+        icon.className = "nav-icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = tab.icon;
+        const label = document.createElement("span");
+        label.textContent = tab.navLabel || tab.label;
+        button.append(icon, label);
+        fragment.appendChild(button);
+    });
+    navigation.replaceChildren(fragment);
+    const twoRows = visible.length > 6;
+    navigation.classList.toggle("nav-two-rows", twoRows);
+    document.body.classList.toggle("has-two-row-nav", twoRows);
+    navigation.style.gridTemplateColumns = `repeat(${twoRows ? 4 : visible.length}, minmax(0, 1fr))`;
+    updateNavigation();
 }
 
-/* =========================================
-   NAVIGATION
-   ========================================= */
+function setNavTabVisible(page, visible) {
+    if (page === "home" || !APP_PAGES.includes(page) || typeof visible !== "boolean") return false;
+    const next = { ...navVisibility, [page]: visible };
+    // Only accept a change after it has been stored. If storage is unavailable,
+    // keep the last rendered choice and do not mislead the user.
+    try { localStorage.setItem(NAV_VISIBILITY_KEY, JSON.stringify(next)); }
+    catch (error) {
+        console.warn("Could not save visible tab settings.", error);
+        return false;
+    }
+    navVisibility = next;
+    if (!visible && page === currentPage) {
+        currentPage = "home";
+        try { saveCurrentPage(); }
+        catch (error) { console.warn("Could not remember Home page.", error); }
+        updateContent();
+    }
+    renderNavigationTabs();
+    return true;
+}
 
-const APP_PAGES = ["home", "new", "saved", "watched", "channels", "search", "queue", "feed"];
+function setupSearchNavigation() {
+    // Last session may have closed on a now-hidden tab: open Home instead.
+    // Direct shortcuts inside the app can still explicitly open hidden pages.
+    if (!APP_PAGES.includes(currentPage) || !navVisibility[currentPage]) {
+        currentPage = "home";
+        try { saveCurrentPage(); }
+        catch (error) { console.warn("Could not remember Home page.", error); }
+    }
+    renderNavigationTabs();
+}
 
 function navigateToPage(page) {
     if (!APP_PAGES.includes(page)) return;
-    // Always open the channel list when arriving through the main navigation.
     activeChannelId = null;
     activeChannelVideoFilter = "all";
-    // Selections never carry across tabs, avoiding accidental edits elsewhere.
     librarySelectMode = false;
     librarySelectedIds.clear();
     currentPage = page;
-    saveCurrentPage();
+    try { saveCurrentPage(); }
+    catch (error) { console.warn("Could not save current page.", error); }
     updateNavigation();
     updateContent();
     window.scrollTo(0, 0);
 }
 
 function setupNavigation() {
-    document.querySelectorAll(".nav-button").forEach((button, index) => {
-        const page = APP_PAGES[index];
-        if (!page) return;
-        button.dataset.appPage = page;
-        button.addEventListener("click", () => navigateToPage(page));
+    const navigation = document.querySelector(".bottom-navigation");
+    if (!navigation || navigation.dataset.navigationReady === "true") return;
+    navigation.dataset.navigationReady = "true";
+    navigation.addEventListener("click", event => {
+        const button = event.target.closest("button[data-app-page]");
+        if (button && navigation.contains(button)) navigateToPage(button.dataset.appPage);
     });
 }
 
 function updateNavigation() {
-    document.querySelectorAll(".nav-button").forEach(button => {
+    document.querySelectorAll(".bottom-navigation .nav-button").forEach(button => {
         const active = button.dataset.appPage === currentPage;
         button.classList.toggle("active", active);
         if (active) button.setAttribute("aria-current", "page");

@@ -347,6 +347,18 @@
     .bottom-navigation .nav-button.active .nav-icon {color:#93c5fd;}
     .bottom-navigation .nav-button:active {background:rgba(96,165,250,.16);}
 
+    /* Version 1.4.8: navigation layout follows visible-tab preferences. */
+    .bottom-navigation.nav-two-rows {grid-template-columns:repeat(4,minmax(0,1fr));}
+    .has-two-row-nav .app-content {padding-bottom:175px;}
+    .visible-tabs-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+    .visible-tab-option {display:flex;align-items:center;gap:9px;min-width:0;
+        padding:11px 9px;min-height:46px;border:1px solid #334155;border-radius:11px;
+        background:#111b2d;color:#e2e8f0;font-size:12px;cursor:pointer;}
+    .visible-tab-option input {flex:0 0 18px;width:18px;height:18px;accent-color:#60a5fa;}
+    .visible-tab-option input:disabled {opacity:.6;}
+    .visible-tab-option span {min-width:0;overflow-wrap:anywhere;}
+    @media(max-width:355px) {.visible-tabs-grid {grid-template-columns:1fr;}}
+
     /* Settings: consistent border and contrast with the rest of the app. */
     .settings-hub {border-color:#3c5069;}
     .settings-group {border-color:var(--ui-border);}
@@ -970,74 +982,13 @@
          BOTTOM NAVIGATION
          ===================================== -->
 
-    <nav class="bottom-navigation">
-
-
-        <button
-            class="nav-button active"
-            type="button"
-        >
-
-            <span class="nav-icon">
-                ●
-            </span>
-
-            <span>
-                New
-            </span>
-
-        </button>
-
-
-
-        <button
-            class="nav-button"
-            type="button"
-        >
-            <span class="nav-icon">
-                ☆
-            </span>
-
-            <span>
-                Saved
-            </span>
-
-        </button>
-
-
-
-        <button
-            class="nav-button"
-            type="button"
-        >
-
-            <span class="nav-icon">
-                ✓
-            </span>
-
-            <span>
-                Watched
-            </span>
-
-        </button>
-
-
-
-        <button
-            class="nav-button"
-            type="button"
-        >
-            <span class="nav-icon">
-                ▣
-            </span>
-
-            <span>
-                Channels
-            </span>
-
-        </button>
-
-
+    <nav class="bottom-navigation" aria-label="Main navigation">
+        <button class="nav-button active" type="button" data-app-page="home"><span class="nav-icon" aria-hidden="true">⌂</span><span>Home</span></button>
+        <button class="nav-button" type="button" data-app-page="new"><span class="nav-icon" aria-hidden="true">●</span><span>New</span></button>
+        <button class="nav-button" type="button" data-app-page="channels"><span class="nav-icon" aria-hidden="true">▣</span><span>Channels</span></button>
+        <button class="nav-button" type="button" data-app-page="search"><span class="nav-icon" aria-hidden="true">⌕</span><span>Search</span></button>
+        <button class="nav-button" type="button" data-app-page="queue"><span class="nav-icon" aria-hidden="true">▶</span><span>Queue</span></button>
+        <button class="nav-button" type="button" data-app-page="feed"><span class="nav-icon" aria-hidden="true">≋</span><span>Feed</span></button>
     </nav>
 
 
@@ -1050,8 +1001,8 @@
     <script src="youtube-api.js?v=20261102-maintenance-1-3-6"></script>
     <script src="library-storage.js?v=20261102-maintenance-1-3-6"></script>
     <script src="backup-manager.js?v=20261102-maintenance-1-3-6"></script>
-    <script src="ui-navigation.js?v=20261103-saved-1-4-3"></script>
-    <script src="app.js?v=20261103-discovery-1-4-7"></script>
+    <script src="ui-navigation.js?v=20261109-tabs-1-4-8"></script>
+    <script src="app.js?v=20261109-tabs-1-4-8"></script>
     <script src="pwa.js?v=20261102-maintenance-1-3-6"></script>
 
 
