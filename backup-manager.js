@@ -1,23 +1,21 @@
 /* ==============================================
    MY YOUTUBE — BACKUP MANAGER
-   Maintenance 1.3.5 (2026-11-02)
+   Release 1.4.9 (2026-11-09)
 
-   Existing Backup & Restore functions moved verbatim
-   from app.js, without changing the JSON format,
-   stored keys, permissions, or restore behavior.
+   Adds Visible Tabs to JSON Backup & Restore.
+   Existing storage keys and backup format v1 are retained.
+   Older backups without Visible Tabs leave the current
+   device's tab settings unchanged.
 
-   This regular browser script runs before app.js.
-   Its functions are called after app.js initializes
-   its global state. No new services are needed.
+   This classic browser script runs before app.js;
+   its functions execute after shared state is ready.
    ============================================== */
-
 /* =========================================
    BACKUP & RESTORE
    - Local JSON file; no server or YouTube API calls.
    - API key is excluded by default.
-   - Restore replaces this device's saved app data after confirmation.
+   - Restore replaces app data after confirmation.
    ========================================= */
-
 function createMyYouTubeBackup(includeApiKey = false) {
     // Never export an apparently empty library over damaged stored data.
     ensureLibraryWritable();
@@ -29,10 +27,11 @@ function createMyYouTubeBackup(includeApiKey = false) {
         watchQueue: [...watchQueue],
         smartFeed: normalizeSmartFeedPrefs(smartFeedPrefs, channels.map(channel => channel.id)),
         homeLayout: normalizeHomeLayout(homeLayout),
+        // A tab preference only changes navigation, never the video library.
+        navVisibility: normalizeNavVisibility(navVisibility),
         currentPage,
         lastRefresh: getLastRefreshTime()
     };
-
     if (includeApiKey) data.apiKey = getApiKey();
 
     return {
@@ -42,7 +41,6 @@ function createMyYouTubeBackup(includeApiKey = false) {
         data
     };
 }
-
 function downloadMyYouTubeBackup() {
     try {
         const includeApiKey = Boolean(
@@ -68,7 +66,6 @@ function downloadMyYouTubeBackup() {
         alert("Could not create the backup. Please try again.");
     }
 }
-
 function checkBackupText(value, name, maxLength = 2000) {
     if (typeof value !== "string" || value.length > maxLength) {
         throw new Error(`Invalid ${name} in backup.`);
@@ -81,6 +78,25 @@ function checkOptionalBackupText(value, name, maxLength = 2000) {
     return checkBackupText(value, name, maxLength);
 }
 
+// A missing field means this is an older backup: do not reset this device's tabs.
+// If the field is present, reject malformed values before touching localStorage.
+function validateBackupNavVisibility(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("Invalid Visible Tabs settings in backup.");
+    }
+    for (const tab of NAV_TAB_DEFINITIONS) {
+        if (Object.prototype.hasOwnProperty.call(value, tab.id) &&
+            typeof value[tab.id] !== "boolean") {
+            throw new Error(`Invalid Visible Tabs setting for ${tab.label}.`);
+        }
+    }
+    if (value.home === false) {
+        throw new Error("Home must remain visible in the backup.");
+    }
+    // Unknown future keys are ignored; missing known keys use safe defaults.
+    return normalizeNavVisibility(value);
+}
+
 function validateMyYouTubeBackup(backup) {
     if (!backup || typeof backup !== "object" ||
         backup.app !== BACKUP_FORMAT || backup.version !== BACKUP_VERSION ||
@@ -88,14 +104,12 @@ function validateMyYouTubeBackup(backup) {
         Array.isArray(backup.data)) {
         throw new Error("This is not a supported My YouTube backup file.");
     }
-
     const d = backup.data;
     if (!Array.isArray(d.videos) || d.videos.length > 15000 ||
         !Array.isArray(d.channels) || d.channels.length > 1000 ||
         !Array.isArray(d.savedSearches) || d.savedSearches.length > 1000) {
         throw new Error("The backup contains missing or oversized lists.");
     }
-
     const restoredVideos = d.videos.map(item => {
         if (!item || typeof item !== "object" || Array.isArray(item)) {
             throw new Error("Invalid video entry in backup.");
@@ -125,7 +139,6 @@ function validateMyYouTubeBackup(backup) {
             isNew: Boolean(item.isNew)
         };
     });
-
     // Older backup files have no watchQueue; treat them as an empty queue.
     const rawQueue = d.watchQueue === undefined ? [] : d.watchQueue;
     if (!Array.isArray(rawQueue) || rawQueue.length > WATCH_QUEUE_LIMIT) {
@@ -139,7 +152,6 @@ function validateMyYouTubeBackup(backup) {
     }
     const restoredQueue = rawQueue.filter(id =>
         !restoredVideos.find(video => video.id === id)?.hidden);
-
     const restoredChannels = d.channels.map(item => {
         if (!item || typeof item !== "object" || Array.isArray(item)) {
             throw new Error("Invalid channel entry in backup.");
@@ -160,7 +172,6 @@ function validateMyYouTubeBackup(backup) {
             verified: Boolean(item.verified)
         };
     });
-
     const restoredSearches = d.savedSearches.map(item => {
         if (!item || typeof item !== "object" || Array.isArray(item)) {
             throw new Error("Invalid saved search in backup.");
@@ -179,7 +190,6 @@ function validateMyYouTubeBackup(backup) {
             searchDepth: normalizeSearchDepth(item.searchDepth)
         };
     });
-
     const prefs = d.searchPreferences;
     if (!prefs || typeof prefs !== "object" || Array.isArray(prefs) ||
         !Number.isInteger(prefs.minMinutes) || prefs.minMinutes < 1 ||
@@ -194,7 +204,6 @@ function validateMyYouTubeBackup(backup) {
         period: normalizeSearchPeriod(prefs.period),
         searchDepth: normalizeSearchDepth(prefs.searchDepth)
     };
-
     const allowedPages = ["home", "new", "saved", "watched", "channels", "search", "queue", "feed"];
     const page = allowedPages.includes(d.currentPage) ? d.currentPage : "new";
     const lastRefresh = d.lastRefresh;
@@ -202,12 +211,14 @@ function validateMyYouTubeBackup(backup) {
         !Number.isFinite(lastRefresh) || lastRefresh < 0) {
         throw new Error("Invalid last refresh time in backup.");
     }
-
     const hasApiKey = Object.prototype.hasOwnProperty.call(d, "apiKey");
     const apiKey = hasApiKey
         ? checkBackupText(d.apiKey, "API key", 1000)
         : null;
-
+    // Keep the old format version: new fields are backward-compatible and optional.
+    const restoredTabs = Object.prototype.hasOwnProperty.call(d, "navVisibility")
+        ? validateBackupNavVisibility(d.navVisibility)
+        : null;
     return {
         videos: restoredVideos,
         channels: restoredChannels,
@@ -217,14 +228,18 @@ function validateMyYouTubeBackup(backup) {
         searchPreferences: restoredPreferences,
         // Older backup files have no Home preference, so use the default layout.
         homeLayout: normalizeHomeLayout(d.homeLayout),
+        navVisibility: restoredTabs,
         currentPage: page,
         lastRefresh,
         hasApiKey,
         apiKey
     };
 }
-
 function applyMyYouTubeBackup(data) {
+    // Old archives leave existing tab preferences untouched.
+    const effectiveTabs = data.navVisibility === null ? navVisibility : data.navVisibility;
+    // If a restored page is hidden, start on Home without changing the library.
+    const effectivePage = effectiveTabs[data.currentPage] ? data.currentPage : "home";
     const writes = [
         [VIDEO_STORAGE_KEY, JSON.stringify(data.videos)],
         [WATCH_QUEUE_KEY, JSON.stringify(data.watchQueue)],
@@ -233,11 +248,13 @@ function applyMyYouTubeBackup(data) {
         [SAVED_SEARCHES_KEY, JSON.stringify(data.savedSearches)],
         [SEARCH_PREFS_KEY, JSON.stringify(data.searchPreferences)],
         [HOME_LAYOUT_KEY, JSON.stringify(data.homeLayout)],
-        [PAGE_STORAGE_KEY, data.currentPage],
+        [PAGE_STORAGE_KEY, effectivePage],
         [LAST_REFRESH_KEY, String(data.lastRefresh)]
     ];
+    if (data.navVisibility !== null) {
+        writes.push([NAV_VISIBILITY_KEY, JSON.stringify(data.navVisibility)]);
+    }
     if (data.hasApiKey) writes.push([API_KEY_STORAGE_KEY, data.apiKey]);
-
     // Keep a copy so a storage/quota error does not silently lose the old data.
     const previous = writes.map(([key]) => [key, localStorage.getItem(key)]);
     try {
@@ -253,7 +270,6 @@ function applyMyYouTubeBackup(data) {
         }
         throw new Error("Could not save restored data. Existing data was kept where possible.");
     }
-
     // A validated restore is the only operation permitted to replace damaged lists.
     const resumingAfterRecovery = Boolean(storageIntegrityIssue);
     storageIntegrityIssue = "";
@@ -272,13 +288,15 @@ function applyMyYouTubeBackup(data) {
     searchPreferences = data.searchPreferences;
     homeLayout = normalizeHomeLayout(data.homeLayout);
     homeEditorOpen = false;
-    currentPage = data.currentPage;
+    navVisibility = effectiveTabs;
+    currentPage = effectivePage;
     searchResults = [];
     searchWasRun = false;
     searchResultMessage = "Enter a topic and tap Search YouTube.";
     // Old cached searches should not reappear after restoring another backup.
     clearSearchCache();
     sortVideos();
+    renderNavigationTabs();
     updateNavigation();
     updateContent();
     if (resumingAfterRecovery) {
@@ -286,7 +304,6 @@ function applyMyYouTubeBackup(data) {
         void maybeAutoRefresh();
     }
 }
-
 async function handleMyYouTubeRestore(event) {
     const input = event.target;
     const file = input?.files?.[0];
@@ -301,27 +318,27 @@ async function handleMyYouTubeRestore(event) {
         alert("This backup file is too large (maximum 10 MB).");
         return;
     }
-
     try {
         const backup = JSON.parse(await file.text());
         const data = validateMyYouTubeBackup(backup);
         const keyNotice = data.hasApiKey
             ? "The backup also contains an API key, which will replace the one on this device."
             : "Your current API key will remain unchanged.";
+        const tabsNotice = data.navVisibility === null
+            ? "This older backup has no Visible Tabs settings. Your current tab choices will stay unchanged."
+            : "Visible Tabs settings from this backup will also be restored.";
         const message =
             `Restore this backup?\n\n` +
             `${data.channels.length} channels, ${data.savedSearches.length} saved searches, ` +
             `${data.videos.length} videos and ${data.watchQueue.length} queued videos.\n\n` +
             `This will REPLACE the existing app data on this device. ` +
-            `Download a backup of your current data first.\n\n${keyNotice}`;
+            `Download a backup of your current data first.\n\n${tabsNotice}\n\n${keyNotice}`;
         if (!confirm(message)) return;
-
         applyMyYouTubeBackup(data);
         closeSettings();
-        alert("Backup restored successfully. Your channels, searches and video statuses are ready.");
+        alert("Backup restored successfully. Your channels, searches, video statuses and tab settings are ready.");
     } catch (error) {
         console.error("Could not restore My YouTube backup:", error);
         alert(`Restore failed: ${error.message || "Invalid backup file."}`);
     }
 }
-

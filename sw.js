@@ -1,7 +1,7 @@
-/* My YouTube PWA 1.3.8 — resilient offline navigation.
+/* My YouTube PWA 1.4.9 — backup + visible tabs update.
    Only fixed app assets are cached. YouTube videos and API responses are never cached.
    Keep Share Receiver navigation working offline, including Android Share query parameters. */
-const CACHE_NAME = 'my-youtube-shell-20261109-tabs-1-4-8';
+const CACHE_NAME = 'my-youtube-shell-20261109-backup-1-4-9';
 const BASE = new URL(self.registration.scope);
 const OFFLINE_PAGE = new URL('index.html', BASE).href;
 const SHARE_PAGE = new URL('share.html', BASE).href;
@@ -22,7 +22,6 @@ const SHELL = [
   './icon-192.png',
   './icon-512.png'
 ].map(path => new URL(path, BASE).href);
-
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
@@ -30,7 +29,6 @@ self.addEventListener('install', event => {
     // Do not skipWaiting automatically; the user can choose when to restart.
   })());
 });
-
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const names = await caches.keys();
@@ -44,14 +42,12 @@ self.addEventListener('activate', event => {
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
-
 function unavailableResponse() {
   return new Response(
     'This My YouTube page is not available offline. Reconnect and try again.',
     { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
   );
 }
-
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET') return;
